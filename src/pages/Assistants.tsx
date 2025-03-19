@@ -127,11 +127,19 @@ const Assistants = () => {
             .select('*')
             .eq('assistant_id', assistant.id);
           
+          // Convert the parameters from Json to Record<string, any>
+          const formattedFunctions = functionsData?.map(func => ({
+            ...func,
+            parameters: typeof func.parameters === 'string' 
+              ? JSON.parse(func.parameters) 
+              : func.parameters
+          })) || [];
+          
           return {
             ...assistant,
             tools: toolsData || [],
-            functions: functionsData || [],
-          };
+            functions: formattedFunctions,
+          } as Assistant;
         })
       );
       

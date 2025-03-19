@@ -7,9 +7,10 @@ import { UserAvatar } from '@/components/UserAvatar';
 
 interface MainLayoutProps {
   children: React.ReactNode;
+  rightPanel?: React.ReactNode;
 }
 
-export function MainLayout({ children }: MainLayoutProps) {
+export function MainLayout({ children, rightPanel }: MainLayoutProps) {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   
@@ -28,8 +29,15 @@ export function MainLayout({ children }: MainLayoutProps) {
             <UserAvatar />
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {children}
+        <main className="flex-1 p-4 md:p-6 overflow-auto flex">
+          <div className={`${rightPanel ? 'flex-1 pr-4' : 'w-full'}`}>
+            {children}
+          </div>
+          {rightPanel && (
+            <div className="w-80 border-l pl-4 hidden md:block">
+              {rightPanel}
+            </div>
+          )}
         </main>
       </div>
     </div>
