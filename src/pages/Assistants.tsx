@@ -25,6 +25,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { v4 as uuidv4 } from '@/lib/uuid';
+import { FunctionEditorDialog } from '@/components/assistants/FunctionEditorDialog';
 import { 
   Plus, 
   ChevronDown, 
@@ -34,7 +35,8 @@ import {
   Code,
   Search,
   Settings,
-  PlusCircle
+  PlusCircle,
+  Edit
 } from 'lucide-react';
 
 interface Assistant {
@@ -94,6 +96,8 @@ const Assistants = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [functionDialogOpen, setFunctionDialogOpen] = useState(false);
+  const [editingFunctionIndex, setEditingFunctionIndex] = useState<number | null>(null);
   
   useEffect(() => {
     if (!user) {
@@ -274,29 +278,37 @@ const Assistants = () => {
   };
   
   const addFunction = () => {
-    if (!currentAssistant) return;
-    
-    setCurrentAssistant({
-      ...currentAssistant,
-      functions: [
-        ...currentAssistant.functions,
-        {
-          ...defaultFunction,
-          name: `function_${currentAssistant.functions.length + 1}`,
-        },
-      ],
-    });
+    setEditingFunctionIndex(null);
+    setFunctionDialogOpen(true);
   };
   
-  const updateFunction = (index: number, updatedFunction: AssistantFunction) => {
+  const editFunction = (index: number) => {
+    setEditingFunctionIndex(index);
+    setFunctionDialogOpen(true);
+  };
+  
+  const handleSaveFunction = (func: AssistantFunction) => {
     if (!currentAssistant) return;
     
-    const updatedFunctions = [...currentAssistant.functions];
-    updatedFunctions[index] = updatedFunction;
+    let updatedFunctions: AssistantFunction[];
+    
+    if (editingFunctionIndex !== null) {
+      // Update existing function
+      updatedFunctions = [...currentAssistant.functions];
+      updatedFunctions[editingFunctionIndex] = func;
+    } else {
+      // Add new function
+      updatedFunctions = [...currentAssistant.functions, func];
+    }
     
     setCurrentAssistant({
       ...currentAssistant,
       functions: updatedFunctions,
+    });
+    
+    toast({
+      title: editingFunctionIndex !== null ? 'Function updated' : 'Function added',
+      description: `The function "${func.name}" has been ${editingFunctionIndex !== null ? 'updated' : 'added'} successfully.`,
     });
   };
   
@@ -309,6 +321,11 @@ const Assistants = () => {
     setCurrentAssistant({
       ...currentAssistant,
       functions: updatedFunctions,
+    });
+    
+    toast({
+      title: 'Function deleted',
+      description: 'The function has been deleted successfully.',
     });
   };
   
@@ -504,22 +521,30 @@ const Assistants = () => {
                         ) : (
                           <div className="space-y-2">
                             {currentAssistant.functions.map((func, index) => (
-                              <Card key={index} className="relative">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="absolute top-2 right-2 h-6 w-6"
-                                  onClick={() => deleteFunction(index)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                                <CardContent className="p-3">
-                                  <Input 
-                                    value={func.name} 
-                                    onChange={(e) => updateFunction(index, { ...func, name: e.target.value })}
-                                    className="font-mono text-sm mb-2"
-                                  />
-                                  <div className="text-xs text-muted-foreground overflow-hidden text-ellipsis">
+                              <Card key={index} className="relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-1 flex">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => editFunction(index)}
+                                    title="Edit function"
+                                  >
+                                    <Edit className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => deleteFunction(index)}
+                                    title="Delete function"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                                <CardContent className="p-3 pt-7">
+                                  <div className="font-mono text-sm font-medium">{func.name}</div>
+                                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
                                     {func.description || "No description"}
                                   </div>
                                 </CardContent>
@@ -660,6 +685,18 @@ const Assistants = () => {
           )}
         </div>
       </div>
+      
+      {/* Function Editor Dialog */}
+      <FunctionEditorDialog
+        isOpen={functionDialogOpen}
+        onClose={() => {
+          setFunctionDialogOpen(false);
+          setEditingFunctionIndex(null);
+        }}
+        onSave={handleSaveFunction}
+        initialFunction={editingFunctionIndex !== null && currentAssistant ? 
+          currentAssistant.functions[editingFunctionIndex] : undefined}
+      />
     </MainLayout>
   );
 };
