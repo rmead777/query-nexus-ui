@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -119,7 +118,6 @@ export function FunctionEditorDialog({
     onClose();
   };
 
-  // Function to format the JSON with line numbers and syntax highlighting
   const renderCodeWithLineNumbers = () => {
     const lines = parametersJson.split('\n');
     
@@ -138,8 +136,8 @@ export function FunctionEditorDialog({
                 setParametersJson(e.target.value);
                 if (jsonError) validateJson(e.target.value);
               }}
-              className="font-mono text-sm min-h-[360px] resize-none p-0 border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 leading-6"
-              style={{ height: `${lines.length * 24}px` }}
+              className="font-mono text-sm min-h-[500px] resize-none p-0 border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 leading-6"
+              style={{ height: `${Math.max(lines.length, 20) * 24}px` }}
             />
           </div>
         </div>
@@ -149,7 +147,7 @@ export function FunctionEditorDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {initialFunction ? 'Edit Function' : 'Add a custom function trigger'}
@@ -223,7 +221,7 @@ export function FunctionEditorDialog({
                   </div>
                 </div>
                 
-                <div className="border rounded-md p-2 bg-background overflow-auto">
+                <div className="border rounded-md p-2 bg-background overflow-auto max-h-[600px]">
                   {renderCodeWithLineNumbers()}
                 </div>
                 
