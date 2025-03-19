@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
@@ -16,7 +15,7 @@ import {
   Upload,
   X,
   ExternalLink,
-  FilePdf,
+  File,
   FileImage,
   FileText as FileTextIcon,
   FileSpreadsheet
@@ -122,7 +121,7 @@ const Documents = () => {
   const getFileIcon = (type: Document['type']) => {
     switch (type) {
       case 'pdf':
-        return <FilePdf className="h-10 w-10 text-red-500" />;
+        return <File className="h-10 w-10 text-red-500" />;
       case 'docx':
         return <FileTextIcon className="h-10 w-10 text-blue-500" />;
       case 'xlsx':
@@ -135,11 +134,9 @@ const Documents = () => {
   };
   
   const filteredDocuments = documents.filter(document => {
-    // Filter by search query
     const matchesSearch = searchQuery === '' || 
       document.name.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // Filter by type
     const matchesType = activeTab === 'all' || 
       (activeTab === 'pdf' && document.type === 'pdf') ||
       (activeTab === 'docx' && document.type === 'docx') ||
