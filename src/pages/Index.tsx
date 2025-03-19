@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -6,8 +5,12 @@ import { ChatOutput } from '@/components/chat/ChatOutput';
 import { SourcePanel } from '@/components/sources/SourcePanel';
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from "@/components/ui/use-toast";
 import { v4 as uuidv4 } from '@/lib/uuid';
+import { useNavigate } from 'react-router-dom';
+import { Settings } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -37,6 +40,7 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
   
   const handleSendMessage = async (message: string) => {
     const newMessage: Message = {
@@ -121,7 +125,29 @@ const Index = () => {
               />
             </Card>
           ) : (
-            <ChatOutput messages={messages} isLoading={isLoading} />
+            <>
+              <div className="flex justify-end mb-4 pr-4">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex items-center gap-1.5"
+                      onClick={() => navigate('/settings?tab=preferences')}
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span className="text-xs font-normal">Preferences</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="max-w-xs text-xs">
+                      Customize AI response sources, conversation options, and citation preferences
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <ChatOutput messages={messages} isLoading={isLoading} />
+            </>
           )}
         </div>
         
