@@ -1,1 +1,4 @@
+
 project_id = "lievuqelejdfxeyatalw"
+[functions.create-assistant-completion]
+verify_jwt = true

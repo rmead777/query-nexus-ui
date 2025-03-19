@@ -9,7 +9,145 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      assistant_functions: {
+        Row: {
+          assistant_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          parameters: Json
+          updated_at: string
+        }
+        Insert: {
+          assistant_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          parameters?: Json
+          updated_at?: string
+        }
+        Update: {
+          assistant_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          parameters?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_functions_assistant_id_fkey"
+            columns: ["assistant_id"]
+            isOneToOne: false
+            referencedRelation: "assistants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_tools: {
+        Row: {
+          assistant_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          tool_type: string
+          updated_at: string
+        }
+        Insert: {
+          assistant_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tool_type: string
+          updated_at?: string
+        }
+        Update: {
+          assistant_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tool_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_tools_assistant_id_fkey"
+            columns: ["assistant_id"]
+            isOneToOne: false
+            referencedRelation: "assistants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistants: {
+        Row: {
+          created_at: string
+          deployment: string
+          id: string
+          instructions: string | null
+          max_tokens: number
+          name: string
+          temperature: number
+          top_p: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deployment: string
+          id?: string
+          instructions?: string | null
+          max_tokens?: number
+          name: string
+          temperature?: number
+          top_p?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deployment?: string
+          id?: string
+          instructions?: string | null
+          max_tokens?: number
+          name?: string
+          temperature?: number
+          top_p?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          first_name?: string | null
+          id: string
+          last_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
