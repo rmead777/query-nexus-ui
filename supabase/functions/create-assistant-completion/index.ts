@@ -19,10 +19,34 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY is not set');
     }
 
-    const { prompt, model, temperature, top_p, max_tokens, instructions, functions } = await req.json();
+    const { 
+      prompt, 
+      model, 
+      temperature, 
+      top_p, 
+      max_tokens, 
+      instructions, 
+      functions,
+      sources = {
+        useDocuments: true,
+        useKnowledgeBase: true, 
+        useExternalSearch: false
+      }
+    } = await req.json();
+
+    // Modify system instructions based on source settings
+    let systemContent = instructions || "You are a helpful assistant.";
+    
+    if (sources.useDocuments && !sources.useKnowledgeBase && !sources.useExternalSearch) {
+      systemContent += " Only use information found in the provided documents to answer questions. If the information is not in the documents, say you don't have that information rather than using your general knowledge.";
+    } else if (sources.useDocuments && sources.useKnowledgeBase && !sources.useExternalSearch) {
+      systemContent += " Prioritize information from the provided documents when answering, but you can also use your built-in knowledge when necessary.";
+    } else if (sources.useDocuments && sources.useKnowledgeBase && sources.useExternalSearch) {
+      systemContent += " Use information from provided documents, your knowledge base, and information from external searches to provide comprehensive answers.";
+    }
 
     const messages = [
-      { role: "system", content: instructions || "You are a helpful assistant." },
+      { role: "system", content: systemContent },
       { role: "user", content: prompt }
     ];
 

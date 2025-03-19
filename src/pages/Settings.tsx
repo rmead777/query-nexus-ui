@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { 
   BadgeCheck, 
   BadgeX, 
@@ -17,7 +19,10 @@ import {
   Info, 
   KeyRound, 
   Save, 
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  BookOpen,
+  Brain,
+  Search
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -38,6 +43,12 @@ interface AzureSettings {
   apiKey: string;
 }
 
+interface ResponseSourceSettings {
+  useDocuments: boolean;
+  useKnowledgeBase: boolean;
+  useExternalSearch: boolean;
+}
+
 const Settings = () => {
   const [apiSettings, setApiSettings] = useState<APISettings>({
     endpoint: 'https://api.openai.com/v1',
@@ -54,6 +65,12 @@ const Settings = () => {
     searchKey: '',
     searchIndexName: '',
     apiKey: ''
+  });
+  
+  const [responseSources, setResponseSources] = useState<ResponseSourceSettings>({
+    useDocuments: true,
+    useKnowledgeBase: true,
+    useExternalSearch: false
   });
   
   const [showApiKey, setShowApiKey] = useState(false);
@@ -316,7 +333,7 @@ const Settings = () => {
             </Card>
           </TabsContent>
           
-          <TabsContent value="preferences" className="animate-fade-in">
+          <TabsContent value="preferences" className="animate-fade-in space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -368,6 +385,98 @@ const Settings = () => {
                 <Button onClick={handleSaveSettings} className="ml-auto">
                   <Save className="h-4 w-4 mr-2" />
                   Save Preferences
+                </Button>
+              </CardFooter>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  AI Response Sources
+                </CardTitle>
+                <CardDescription>
+                  Control where the AI should source information for responses
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-start space-x-3">
+                    <Checkbox 
+                      id="use-documents" 
+                      checked={responseSources.useDocuments}
+                      onCheckedChange={(checked) => 
+                        setResponseSources({...responseSources, useDocuments: checked === true})}
+                    />
+                    <div className="space-y-1">
+                      <Label 
+                        htmlFor="use-documents" 
+                        className="text-base font-medium flex items-center gap-1.5"
+                      >
+                        <BookOpen className="h-4 w-4" />
+                        Uploaded Documents
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Limit responses to information found in the uploaded or saved documents only
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3">
+                    <Checkbox 
+                      id="use-knowledge-base" 
+                      checked={responseSources.useKnowledgeBase}
+                      onCheckedChange={(checked) => 
+                        setResponseSources({...responseSources, useKnowledgeBase: checked === true})}
+                    />
+                    <div className="space-y-1">
+                      <Label 
+                        htmlFor="use-knowledge-base" 
+                        className="text-base font-medium flex items-center gap-1.5"
+                      >
+                        <Brain className="h-4 w-4" />
+                        AI Knowledge Base
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Allow the AI to use its pre-trained knowledge to answer questions
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3">
+                    <Checkbox 
+                      id="use-external-search" 
+                      checked={responseSources.useExternalSearch}
+                      onCheckedChange={(checked) => 
+                        setResponseSources({...responseSources, useExternalSearch: checked === true})}
+                    />
+                    <div className="space-y-1">
+                      <Label 
+                        htmlFor="use-external-search" 
+                        className="text-base font-medium flex items-center gap-1.5"
+                      >
+                        <Search className="h-4 w-4" />
+                        External Search
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Allow the AI to search for additional information from external sources
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 text-sm p-3 rounded-md bg-blue-50 text-blue-600">
+                  <Info className="h-4 w-4 flex-shrink-0" />
+                  <span>
+                    Using multiple sources provides more comprehensive responses, but may increase response time.
+                    For the most accurate document-specific answers, enable "Uploaded Documents" only.
+                  </span>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={handleSaveSettings} className="ml-auto">
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Source Settings
                 </Button>
               </CardFooter>
             </Card>
