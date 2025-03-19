@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Code, Save, X } from 'lucide-react';
+import { Code, Save, X, HelpCircle, ChevronDown } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 interface AssistantFunction {
   id?: string;
@@ -118,6 +119,34 @@ export function FunctionEditorDialog({
     onClose();
   };
 
+  // Function to format the JSON with line numbers and syntax highlighting
+  const renderCodeWithLineNumbers = () => {
+    const lines = parametersJson.split('\n');
+    
+    return (
+      <div className="relative font-mono text-sm">
+        <div className="flex">
+          <div className="pr-4 text-right text-muted-foreground select-none w-8">
+            {lines.map((_, i) => (
+              <div key={i} className="h-6 leading-6">{i + 1}</div>
+            ))}
+          </div>
+          <div className="flex-1 overflow-auto">
+            <Textarea
+              value={parametersJson}
+              onChange={(e) => {
+                setParametersJson(e.target.value);
+                if (jsonError) validateJson(e.target.value);
+              }}
+              className="font-mono text-sm min-h-[360px] resize-none p-0 border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 leading-6"
+              style={{ height: `${lines.length * 24}px` }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
@@ -170,24 +199,34 @@ export function FunctionEditorDialog({
               </div>
               
               <div>
-                <div className="flex justify-between items-center">
-                  <Label htmlFor="function-parameters">Parameters (JSON Schema)</Label>
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="function-parameters">Function specification</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-5 w-5">
+                          <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80">
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">JSON Schema Format</h4>
+                          <p className="text-sm">Define the parameters your function expects using JSON Schema format. Include types, descriptions, and required fields.</p>
+                          <p className="text-sm text-muted-foreground">Learn more about <a href="#" className="underline">JSON Schema</a></p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     <Code className="inline h-3 w-3 mr-1" />
                     JSON
                   </div>
                 </div>
-                <Textarea
-                  id="function-parameters"
-                  rows={15}
-                  value={parametersJson}
-                  onChange={(e) => {
-                    setParametersJson(e.target.value);
-                    if (jsonError) validateJson(e.target.value);
-                  }}
-                  className="font-mono text-sm"
-                  placeholder="Enter JSON Schema"
-                />
+                
+                <div className="border rounded-md p-2 bg-background overflow-auto">
+                  {renderCodeWithLineNumbers()}
+                </div>
+                
                 {jsonError && (
                   <p className="text-destructive text-sm mt-1">{jsonError}</p>
                 )}
