@@ -19,6 +19,7 @@ export type Database = {
           model: string | null
           name: string
           provider: string
+          request_template: Json | null
           updated_at: string
           user_id: string
         }
@@ -31,6 +32,7 @@ export type Database = {
           model?: string | null
           name: string
           provider: string
+          request_template?: Json | null
           updated_at?: string
           user_id: string
         }
@@ -43,6 +45,7 @@ export type Database = {
           model?: string | null
           name?: string
           provider?: string
+          request_template?: Json | null
           updated_at?: string
           user_id?: string
         }
@@ -271,8 +274,10 @@ export type Database = {
           azure_search_key: string | null
           created_at: string | null
           id: string
+          instructions: string | null
           max_tokens: number | null
           model: string | null
+          request_template: Json | null
           response_sources: Json | null
           temperature: number | null
           updated_at: string | null
@@ -290,8 +295,10 @@ export type Database = {
           azure_search_key?: string | null
           created_at?: string | null
           id?: string
+          instructions?: string | null
           max_tokens?: number | null
           model?: string | null
+          request_template?: Json | null
           response_sources?: Json | null
           temperature?: number | null
           updated_at?: string | null
@@ -309,8 +316,10 @@ export type Database = {
           azure_search_key?: string | null
           created_at?: string | null
           id?: string
+          instructions?: string | null
           max_tokens?: number | null
           model?: string | null
+          request_template?: Json | null
           response_sources?: Json | null
           temperature?: number | null
           updated_at?: string | null
