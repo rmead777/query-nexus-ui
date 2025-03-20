@@ -10,3 +10,4 @@ ADD COLUMN IF NOT EXISTS request_template JSONB;
 -- Add instructions column to user_settings if it doesn't exist
 ALTER TABLE IF EXISTS public.user_settings 
 ADD COLUMN IF NOT EXISTS instructions TEXT;
+

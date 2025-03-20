@@ -106,9 +106,9 @@ const Settings = () => {
   const [showAzureKey, setShowAzureKey] = useState(false);
   const [showSearchKey, setShowSearchKey] = useState(false);
   const [showNewApiKey, setShowNewApiKey] = useState(false);
-  const [useAzure, setUseAzure] = useState(useAzure);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [useAzure, setUseAzure] = useState(false);
   
   const { toast } = useToast();
   const { user } = useAuth();

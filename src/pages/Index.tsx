@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -79,7 +80,11 @@ const Index = () => {
           model = settingsData.model || 'gpt-4o-mini';
           temperature = settingsData.temperature || 0.7;
           maxTokens = settingsData.max_tokens || 2048;
+          
+          // Check for instructions, added safely with optional chaining
           instructions = settingsData.instructions || instructions;
+          
+          // Check for request_template, added safely with optional chaining
           requestTemplate = settingsData.request_template || null;
           
           if (settingsData.response_sources) {
@@ -103,7 +108,7 @@ const Index = () => {
         if (endpointData) {
           provider = endpointData.provider || 'OpenAI';
           
-          // If endpoint has a custom request template, use it
+          // If endpoint has a custom request template, use it - safely with optional chaining
           if (endpointData.request_template) {
             requestTemplate = endpointData.request_template;
           }
