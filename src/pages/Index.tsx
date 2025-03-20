@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -56,11 +55,16 @@ const Index = () => {
       let apiEndpoint = null;
       let apiKey = null;
       let model = 'gpt-4o-mini';
+      let provider = 'OpenAI';
       let sourcesSettings = {
         useDocuments: true,
         useKnowledgeBase: true,
         useExternalSearch: false
       };
+      let requestTemplate = null;
+      let temperature = 0.7;
+      let maxTokens = 2048;
+      let instructions = "You are a helpful assistant that provides accurate and concise information.";
       
       if (user) {
         const { data: settingsData } = await supabase
@@ -73,6 +77,10 @@ const Index = () => {
           apiEndpoint = settingsData.api_endpoint;
           apiKey = settingsData.api_key;
           model = settingsData.model || 'gpt-4o-mini';
+          temperature = settingsData.temperature || 0.7;
+          maxTokens = settingsData.max_tokens || 2048;
+          instructions = settingsData.instructions || instructions;
+          requestTemplate = settingsData.request_template || null;
           
           if (settingsData.response_sources) {
             const sourcesData = settingsData.response_sources as Record<string, unknown>;
@@ -83,6 +91,23 @@ const Index = () => {
             };
           }
         }
+        
+        // Get provider info from active endpoint if available
+        const { data: endpointData } = await supabase
+          .from('api_endpoints')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .single();
+          
+        if (endpointData) {
+          provider = endpointData.provider || 'OpenAI';
+          
+          // If endpoint has a custom request template, use it
+          if (endpointData.request_template) {
+            requestTemplate = endpointData.request_template;
+          }
+        }
       }
       
       // Call the create-assistant-completion edge function
@@ -90,12 +115,16 @@ const Index = () => {
         body: {
           prompt: message,
           model: model,
-          temperature: 0.7,
+          temperature: temperature,
           top_p: 1,
-          max_tokens: 2048,
-          instructions: "You are a helpful assistant that provides accurate and concise information.",
+          max_tokens: maxTokens,
+          instructions: instructions,
           sources: sourcesSettings,
-          documentIds: [] // Add document IDs here if needed
+          documentIds: [], // Add document IDs here if needed
+          requestTemplate: requestTemplate,
+          apiEndpoint: apiEndpoint,
+          apiKey: apiKey,
+          provider: provider
         }
       });
       
@@ -103,9 +132,36 @@ const Index = () => {
         throw new Error(`Edge function error: ${error.message}`);
       }
       
-      // Extract the assistant's response
-      const assistantContent = data?.choices?.[0]?.message?.content || 
-                              "I'm sorry, I couldn't process your request at this time.";
+      // Extract the assistant's response based on provider format
+      let assistantContent = "";
+      
+      if (requestTemplate) {
+        // Handle different response formats based on provider
+        if (provider === 'OpenAI' || provider === 'Custom') {
+          assistantContent = data?.choices?.[0]?.message?.content || 
+                           "I'm sorry, I couldn't process your request at this time.";
+        } else if (provider === 'Anthropic') {
+          assistantContent = data?.content?.[0]?.text || 
+                           "I'm sorry, I couldn't process your request at this time.";
+        } else if (provider === 'Google') {
+          assistantContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || 
+                           "I'm sorry, I couldn't process your request at this time.";
+        } else if (provider === 'Cohere') {
+          assistantContent = data?.text || 
+                           "I'm sorry, I couldn't process your request at this time.";
+        } else {
+          // Default fallback - try to extract content from common response formats
+          assistantContent = data?.choices?.[0]?.message?.content || 
+                           data?.content?.[0]?.text ||
+                           data?.text ||
+                           data?.response ||
+                           "I'm sorry, I couldn't process your request at this time.";
+        }
+      } else {
+        // Default OpenAI format
+        assistantContent = data?.choices?.[0]?.message?.content || 
+                          "I'm sorry, I couldn't process your request at this time.";
+      }
       
       // Add the assistant response to messages
       const assistantResponse: Message = {

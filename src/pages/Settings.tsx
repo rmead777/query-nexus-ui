@@ -33,11 +33,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ApiEndpoint, ModelOption } from '@/types/api';
+import { Textarea } from '@/components/ui/textarea';
+import { RequestTemplateEditor } from '@/components/settings/RequestTemplateEditor';
+import { defaultRequestTemplates, RequestTemplate } from '@/types/api';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ResponseSourceSettings {
   useDocuments: boolean;
   useKnowledgeBase: boolean;
   useExternalSearch: boolean;
+}
+
+interface AdvancedApiSettings {
+  requestTemplate: Record<string, any> | null;
+  showAdvanced: boolean;
 }
 
 const Settings = () => {
@@ -46,7 +56,8 @@ const Settings = () => {
     apiKey: '',
     model: 'gpt-4o',
     temperature: 0.7,
-    maxTokens: 1024
+    maxTokens: 1024,
+    instructions: "You are a helpful assistant that provides accurate and concise information."
   });
   
   const [azureSettings, setAzureSettings] = useState({
@@ -95,7 +106,7 @@ const Settings = () => {
   const [showAzureKey, setShowAzureKey] = useState(false);
   const [showSearchKey, setShowSearchKey] = useState(false);
   const [showNewApiKey, setShowNewApiKey] = useState(false);
-  const [useAzure, setUseAzure] = useState(false);
+  const [useAzure, setUseAzure] = useState(useAzure);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -105,11 +116,16 @@ const Settings = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<string>('preferences');
   
+  const [advancedSettings, setAdvancedSettings] = useState<AdvancedApiSettings>({
+    requestTemplate: null,
+    showAdvanced: false
+  });
+  
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const tab = searchParams.get('tab');
     
-    if (tab && ['preferences', 'api', 'endpoints'].includes(tab)) {
+    if (tab && ['preferences', 'api', 'endpoints', 'advanced'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [location]);
@@ -134,7 +150,8 @@ const Settings = () => {
             apiKey: settingsData.api_key || '',
             model: settingsData.model || 'gpt-4o',
             temperature: settingsData.temperature || 0.7,
-            maxTokens: settingsData.max_tokens || 1024
+            maxTokens: settingsData.max_tokens || 1024,
+            instructions: settingsData.instructions || "You are a helpful assistant that provides accurate and concise information."
           });
           
           setSelectedModel(settingsData.model || 'gpt-4o');
@@ -158,6 +175,13 @@ const Settings = () => {
               useExternalSearch: typeof sourcesData.useExternalSearch === 'boolean' ? sourcesData.useExternalSearch : false
             };
             setResponseSources(typedSources);
+          }
+          
+          if (settingsData.request_template) {
+            setAdvancedSettings({
+              ...advancedSettings,
+              requestTemplate: settingsData.request_template
+            });
           }
         }
         
@@ -239,7 +263,7 @@ const Settings = () => {
     }
   };
   
-  const handleSaveSettings = async (settingType: 'preferences' | 'api' | 'azure') => {
+  const handleSaveSettings = async (settingType: 'preferences' | 'api' | 'azure' | 'advanced') => {
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -283,6 +307,11 @@ const Settings = () => {
           azure_search_endpoint: azureSettings.searchEndpoint,
           azure_search_key: azureSettings.searchKey,
           azure_search_index_name: azureSettings.searchIndexName,
+          updated_at: new Date().toISOString()
+        };
+      } else if (settingType === 'advanced') {
+        settingsData = {
+          request_template: advancedSettings.requestTemplate,
           updated_at: new Date().toISOString()
         };
       }
@@ -350,7 +379,8 @@ const Settings = () => {
         api_endpoint: newEndpoint.api_endpoint || null,
         api_key: newEndpoint.api_key || null,
         model: newEndpoint.model || null,
-        is_active: false
+        is_active: false,
+        request_template: advancedSettings.requestTemplate
       };
       
       if (isEditingEndpoint && newEndpoint.id) {
@@ -362,7 +392,8 @@ const Settings = () => {
             api_endpoint: endpointData.api_endpoint,
             api_key: endpointData.api_key,
             model: endpointData.model,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            request_template: advancedSettings.requestTemplate
           })
           .eq('id', newEndpoint.id)
           .eq('user_id', user.id);
@@ -519,6 +550,22 @@ const Settings = () => {
     }
   };
   
+  const handleProviderSelect = (providerValue: string) => {
+    setNewEndpoint({
+      ...newEndpoint,
+      provider: providerValue
+    });
+    
+    // Set a default template for this provider
+    const providerTemplate = defaultRequestTemplates.find(t => t.provider === providerValue);
+    if (providerTemplate) {
+      setAdvancedSettings({
+        ...advancedSettings,
+        requestTemplate: providerTemplate.template
+      });
+    }
+  };
+  
   if (loading) {
     return (
       <MainLayout>
@@ -543,10 +590,11 @@ const Settings = () => {
         </div>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
             <TabsTrigger value="api">API Settings</TabsTrigger>
             <TabsTrigger value="endpoints">API Keys & Endpoints</TabsTrigger>
+            <TabsTrigger value="advanced">Advanced</TabsTrigger>
           </TabsList>
           
           <TabsContent value="preferences" className="animate-fade-in space-y-6">
@@ -763,6 +811,25 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
+                    <Label htmlFor="provider-select">Provider</Label>
+                    <Select
+                      value={newEndpoint.provider}
+                      onValueChange={handleProviderSelect}
+                    >
+                      <SelectTrigger id="provider-select">
+                        <SelectValue placeholder="Select a provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OpenAI">OpenAI</SelectItem>
+                        <SelectItem value="Anthropic">Anthropic</SelectItem>
+                        <SelectItem value="Google">Google (Gemini)</SelectItem>
+                        <SelectItem value="Cohere">Cohere</SelectItem>
+                        <SelectItem value="Custom">Custom Provider</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
                     <Label htmlFor="model-select">Model</Label>
                     <Select
                       value={selectedModel || undefined}
@@ -819,6 +886,31 @@ const Settings = () => {
                       </Button>
                     </div>
                   </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="temperature">Temperature</Label>
+                    <Input
+                      id="temperature"
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={apiSettings.temperature}
+                      onChange={(e) => setApiSettings({...apiSettings, temperature: parseFloat(e.target.value)})}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="max-tokens">Max Tokens</Label>
+                    <Input
+                      id="max-tokens"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={apiSettings.maxTokens}
+                      onChange={(e) => setApiSettings({...apiSettings, maxTokens: parseInt(e.target.value)})}
+                    />
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
@@ -857,397 +949,4 @@ const Settings = () => {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label htmlFor="use-azure" className="text-sm font-normal">Enable Azure</Label>
-                    <Switch
-                      id="use-azure"
-                      checked={useAzure}
-                      onCheckedChange={setUseAzure}
-                    />
-                  </div>
-                </div>
-              </CardHeader>
-              
-              {useAzure && (
-                <>
-                  <Separator />
-                  <CardContent className="pt-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="azure-endpoint-url">ENDPOINT_URL</Label>
-                          <Input
-                            id="azure-endpoint-url"
-                            value={azureSettings.endpointUrl}
-                            onChange={(e) => setAzureSettings({...azureSettings, endpointUrl: e.target.value})}
-                            placeholder="https://your-resource.openai.azure.com"
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="azure-deployment-name">DEPLOYMENT_NAME</Label>
-                          <Input
-                            id="azure-deployment-name"
-                            value={azureSettings.deploymentName}
-                            onChange={(e) => setAzureSettings({...azureSettings, deploymentName: e.target.value})}
-                            placeholder="your-deployment"
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="azure-api-key">AZURE_OPENAI_API_KEY</Label>
-                          <div className="relative">
-                            <Input
-                              id="azure-api-key"
-                              type={showAzureKey ? "text" : "password"}
-                              value={azureSettings.apiKey}
-                              onChange={(e) => setAzureSettings({...azureSettings, apiKey: e.target.value})}
-                              placeholder="Your Azure OpenAI API key"
-                              className="pr-10"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="absolute right-0 top-0 h-10 w-10"
-                              onClick={() => setShowAzureKey(!showAzureKey)}
-                            >
-                              {showAzureKey ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                              <span className="sr-only">
-                                {showAzureKey ? "Hide key" : "Show key"}
-                              </span>
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="azure-search-endpoint">SEARCH_ENDPOINT</Label>
-                          <Input
-                            id="azure-search-endpoint"
-                            value={azureSettings.searchEndpoint}
-                            onChange={(e) => setAzureSettings({...azureSettings, searchEndpoint: e.target.value})}
-                            placeholder="https://your-search.search.windows.net"
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="azure-search-key">SEARCH_KEY</Label>
-                          <div className="relative">
-                            <Input
-                              id="azure-search-key"
-                              type={showSearchKey ? "text" : "password"}
-                              value={azureSettings.searchKey}
-                              onChange={(e) => setAzureSettings({...azureSettings, searchKey: e.target.value})}
-                              placeholder="Your Azure Cognitive Search key"
-                              className="pr-10"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="absolute right-0 top-0 h-10 w-10"
-                              onClick={() => setShowSearchKey(!showSearchKey)}
-                            >
-                              {showSearchKey ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                              <span className="sr-only">
-                                {showSearchKey ? "Hide key" : "Show key"}
-                              </span>
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="azure-search-index">SEARCH_INDEX_NAME</Label>
-                          <Input
-                            id="azure-search-index"
-                            value={azureSettings.searchIndexName}
-                            onChange={(e) => setAzureSettings({...azureSettings, searchIndexName: e.target.value})}
-                            placeholder="your-search-index"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 text-sm p-3 rounded-md bg-blue-50 text-blue-600">
-                      <Info className="h-4 w-4" />
-                      <span>
-                        Azure integration enables advanced RAG capabilities through Azure Cognitive Search and Azure OpenAI services.
-                      </span>
-                    </div>
-                  </CardContent>
-                </>
-              )}
-              
-              <CardFooter className="flex justify-end">
-                <Button 
-                  onClick={() => handleSaveSettings('azure')} 
-                  disabled={!useAzure || saving}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Azure Settings
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="endpoints" className="animate-fade-in space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <KeyRound className="h-5 w-5" />
-                      API Endpoints
-                    </CardTitle>
-                    <CardDescription>
-                      Manage your API endpoints for different models and providers.
-                    </CardDescription>
-                  </div>
-                  <Button onClick={() => {
-                    setNewEndpoint({
-                      name: '',
-                      api_endpoint: '',
-                      api_key: '',
-                      model: '',
-                      provider: 'OpenAI'
-                    });
-                    setIsEditingEndpoint(false);
-                    setIsAddingEndpoint(true);
-                  }} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Endpoint
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isAddingEndpoint ? (
-                  <div className="space-y-4 border rounded-lg p-4">
-                    <h3 className="text-lg font-medium">
-                      {isEditingEndpoint ? "Edit API Endpoint" : "Add New API Endpoint"}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="new-name">Name</Label>
-                        <Input
-                          id="new-name"
-                          value={newEndpoint.name}
-                          onChange={(e) => setNewEndpoint({...newEndpoint, name: e.target.value})}
-                          placeholder="My OpenAI Key"
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="new-provider">Provider</Label>
-                        <Select 
-                          value={newEndpoint.provider} 
-                          onValueChange={(value) => setNewEndpoint({...newEndpoint, provider: value})}
-                        >
-                          <SelectTrigger id="new-provider">
-                            <SelectValue placeholder="Select provider" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="OpenAI">OpenAI</SelectItem>
-                            <SelectItem value="Anthropic">Anthropic</SelectItem>
-                            <SelectItem value="Cohere">Cohere</SelectItem>
-                            <SelectItem value="Custom">Custom</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="new-endpoint">API Endpoint</Label>
-                        <Input
-                          id="new-endpoint"
-                          value={newEndpoint.api_endpoint}
-                          onChange={(e) => setNewEndpoint({...newEndpoint, api_endpoint: e.target.value})}
-                          placeholder="https://api.openai.com/v1"
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="new-model">Default Model</Label>
-                        <Input
-                          id="new-model"
-                          value={newEndpoint.model}
-                          onChange={(e) => setNewEndpoint({...newEndpoint, model: e.target.value})}
-                          placeholder="gpt-4o"
-                        />
-                      </div>
-                      
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="new-api-key">API Key</Label>
-                        <div className="relative">
-                          <Input
-                            id="new-api-key"
-                            type={showNewApiKey ? "text" : "password"}
-                            value={newEndpoint.api_key}
-                            onChange={(e) => setNewEndpoint({...newEndpoint, api_key: e.target.value})}
-                            placeholder="Your API key"
-                            className="pr-10"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-0 top-0 h-10 w-10"
-                            onClick={() => setShowNewApiKey(!showNewApiKey)}
-                          >
-                            {showNewApiKey ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                            <span className="sr-only">
-                              {showNewApiKey ? "Hide API key" : "Show API key"}
-                            </span>
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-end gap-2 mt-4">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setIsAddingEndpoint(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button 
-                        onClick={handleAddEndpoint}
-                        disabled={saving || !newEndpoint.name}
-                      >
-                        {saving ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-4 w-4 mr-2" />
-                            {isEditingEndpoint ? "Update" : "Save"}
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ) : apiEndpoints.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Provider</TableHead>
-                        <TableHead>Model</TableHead>
-                        <TableHead>Active</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {apiEndpoints.map(endpoint => (
-                        <TableRow key={endpoint.id}>
-                          <TableCell className="font-medium">{endpoint.name}</TableCell>
-                          <TableCell>{endpoint.provider}</TableCell>
-                          <TableCell>{endpoint.model || 'Not set'}</TableCell>
-                          <TableCell>
-                            {endpoint.is_active ? (
-                              <BadgeCheck className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleSetActiveEndpoint(endpoint.id)}
-                              >
-                                Set active
-                              </Button>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditEndpoint(endpoint)}
-                            >
-                              <Edit className="h-4 w-4" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  <span className="sr-only">Delete</span>
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Delete API Endpoint</DialogTitle>
-                                  <DialogDescription>
-                                    Are you sure you want to delete the "{endpoint.name}" API endpoint? This action cannot be undone.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <DialogFooter>
-                                  <Button variant="outline" className="mr-2">Cancel</Button>
-                                  <Button 
-                                    variant="destructive" 
-                                    onClick={() => handleDeleteEndpoint(endpoint.id)}
-                                  >
-                                    Delete
-                                  </Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-8">
-                    <KeyRound className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-1">No API Endpoints</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Add your first API endpoint to get started.
-                    </p>
-                    <Button onClick={() => setIsAddingEndpoint(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add API Endpoint
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter>
-                <div className="text-sm text-muted-foreground flex items-start gap-2 w-full">
-                  <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <p>
-                    Store multiple API endpoints for different models and providers. The active endpoint will be used for API requests.
-                    All API keys are encrypted and stored securely.
-                  </p>
-                </div>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </MainLayout>
-  );
-};
-
-export default Settings;
+                    <Label htmlFor="use-azure" className="text-sm font-normal">Enable Azure</

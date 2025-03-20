@@ -7,6 +7,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function to replace template placeholders
+function formatTemplate(template: any, values: Record<string, any>): any {
+  if (typeof template === 'string') {
+    let result = template;
+    for (const [key, value] of Object.entries(values)) {
+      result = result.replace(`{${key}}`, value);
+    }
+    return result;
+  } else if (Array.isArray(template)) {
+    return template.map(item => formatTemplate(item, values));
+  } else if (typeof template === 'object' && template !== null) {
+    const result: Record<string, any> = {};
+    for (const [key, value] of Object.entries(template)) {
+      result[key] = formatTemplate(value, values);
+    }
+    return result;
+  }
+  return template;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -25,14 +45,18 @@ serve(async (req) => {
       temperature, 
       top_p, 
       max_tokens, 
-      instructions, 
+      instructions,
       functions,
       documentIds = [],
       sources = {
         useDocuments: true,
         useKnowledgeBase: true, 
         useExternalSearch: false
-      }
+      },
+      requestTemplate,
+      apiEndpoint,
+      apiKey,
+      provider
     } = await req.json();
 
     // Create Supabase client to access documents if needed
@@ -70,58 +94,84 @@ serve(async (req) => {
       systemContent += " Use information from provided documents, your knowledge base, and information from external searches to provide comprehensive answers.";
     }
 
-    // Create messages array, including document content if available
-    const messages = [
-      { role: "system", content: systemContent }
-    ];
-
-    // Add document content as a system message if available
-    if (documentContent) {
-      messages.push({ 
-        role: "system", 
-        content: `Here are the relevant documents to use for answering the user's question:\n\n${documentContent}`
-      });
-    }
-
-    // Add the user's prompt
-    messages.push({ role: "user", content: prompt });
-
-    const requestBody: any = {
-      model: model || "gpt-4o-mini",
-      messages,
-      temperature: temperature !== undefined ? temperature : 0.7,
-      top_p: top_p !== undefined ? top_p : 1,
-      max_tokens: max_tokens || 2048,
+    // Handle custom request template if provided
+    let requestBody: any;
+    let endpoint = apiEndpoint || "https://api.openai.com/v1/chat/completions";
+    let requestHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey || OPENAI_API_KEY}`
     };
 
-    if (functions && functions.length > 0) {
-      requestBody.tools = functions.map((func: any) => ({
-        type: "function",
-        function: {
-          name: func.name,
-          description: func.description,
-          parameters: func.parameters || { type: "object", properties: {} }
-        }
-      }));
+    if (requestTemplate) {
+      console.log("Using custom request template");
+      
+      // Prepare values for template placeholders
+      const templateValues = {
+        model: model || "gpt-4o-mini",
+        prompt: prompt,
+        instructions: systemContent,
+        temperature: temperature !== undefined ? temperature : 0.7,
+        max_tokens: max_tokens || 2048
+      };
+      
+      // Format the template with the values
+      requestBody = formatTemplate(requestTemplate, templateValues);
+      
+      console.log("Formatted request:", JSON.stringify(requestBody, null, 2));
+    } else {
+      // Default OpenAI format
+      // Create messages array, including document content if available
+      const messages = [
+        { role: "system", content: systemContent }
+      ];
+
+      // Add document content as a system message if available
+      if (documentContent) {
+        messages.push({ 
+          role: "system", 
+          content: `Here are the relevant documents to use for answering the user's question:\n\n${documentContent}`
+        });
+      }
+
+      // Add the user's prompt
+      messages.push({ role: "user", content: prompt });
+
+      requestBody = {
+        model: model || "gpt-4o-mini",
+        messages,
+        temperature: temperature !== undefined ? temperature : 0.7,
+        top_p: top_p !== undefined ? top_p : 1,
+        max_tokens: max_tokens || 2048,
+      };
+
+      if (functions && functions.length > 0) {
+        requestBody.tools = functions.map((func: any) => ({
+          type: "function",
+          function: {
+            name: func.name,
+            description: func.description,
+            parameters: func.parameters || { type: "object", properties: {} }
+          }
+        }));
+      }
     }
 
-    console.log("Sending request to OpenAI:", JSON.stringify(requestBody, null, 2));
+    console.log("Provider:", provider);
+    console.log("Endpoint:", endpoint);
+    console.log("Sending request to AI provider:", JSON.stringify(requestBody, null, 2));
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`
-      },
+      headers: requestHeaders,
       body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();
     
-    console.log("OpenAI response:", JSON.stringify(data, null, 2));
+    console.log("AI provider response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${data.error?.message || response.statusText}`);
+      throw new Error(`API error: ${data.error?.message || response.statusText}`);
     }
 
     return new Response(JSON.stringify(data), {
