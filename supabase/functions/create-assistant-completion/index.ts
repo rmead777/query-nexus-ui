@@ -180,6 +180,13 @@ serve(async (req) => {
           };
         }
       }
+    } else if (provider === "OpenAI") {
+      // Make sure the endpoint is correctly formed for OpenAI chat completions
+      if (!endpoint.endsWith("chat/completions") && !endpoint.endsWith("/")) {
+        endpoint = endpoint + "/chat/completions";
+      } else if (endpoint.endsWith("/")) {
+        endpoint = endpoint + "chat/completions";
+      }
     }
 
     console.log("Provider:", provider);
@@ -192,13 +199,21 @@ serve(async (req) => {
       body: JSON.stringify(requestBody),
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error response:", errorText);
+      let errorObj;
+      try {
+        errorObj = JSON.parse(errorText);
+      } catch (e) {
+        errorObj = { error: errorText };
+      }
+      throw new Error(`API error: ${errorObj.error?.message || errorObj.error || response.statusText}`);
+    }
+
     const data = await response.json();
     
     console.log("AI provider response:", JSON.stringify(data, null, 2));
-
-    if (!response.ok) {
-      throw new Error(`API error: ${data.error?.message || response.statusText}`);
-    }
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -205,7 +205,7 @@ const Index = () => {
       console.error('Error processing message:', error);
       toast({
         title: "Error",
-        description: "Failed to process your message. Please try again.",
+        description: `Failed to process your message: ${error.message}`,
         variant: "destructive"
       });
     } finally {
