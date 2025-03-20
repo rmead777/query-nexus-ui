@@ -9,7 +9,7 @@ export interface ApiEndpoint {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  request_template?: Record<string, any> | null;
+  request_template?: Record<string, any> | null | string | any; // Modified to accept more types
 }
 
 export interface ModelOption {
