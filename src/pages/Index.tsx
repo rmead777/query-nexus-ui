@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -8,9 +9,11 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from "@/components/ui/use-toast";
-import { v4 as uuidv4 } from '@/lib/uuid';
+import { v4 } from '@/lib/uuid';
 import { useNavigate } from 'react-router-dom';
 import { Settings } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Message {
   id: string;
@@ -28,12 +31,6 @@ interface Source {
   relevanceScore: number; 
 }
 
-// Simulated UUID function
-function v4() {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
-}
-
 const Index = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
@@ -41,6 +38,7 @@ const Index = () => {
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const handleSendMessage = async (message: string) => {
     const newMessage: Message = {
@@ -54,45 +52,93 @@ const Index = () => {
     setIsLoading(true);
     
     try {
-      // Simulate API response delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // First, fetch user settings to get API endpoint, key, model, etc.
+      let apiEndpoint = null;
+      let apiKey = null;
+      let model = 'gpt-4o-mini';
+      let sourcesSettings = {
+        useDocuments: true,
+        useKnowledgeBase: true,
+        useExternalSearch: false
+      };
       
-      // Add a simulated assistant response
+      if (user) {
+        const { data: settingsData } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (settingsData) {
+          apiEndpoint = settingsData.api_endpoint;
+          apiKey = settingsData.api_key;
+          model = settingsData.model || 'gpt-4o-mini';
+          
+          if (settingsData.response_sources) {
+            const sourcesData = settingsData.response_sources as Record<string, unknown>;
+            sourcesSettings = {
+              useDocuments: typeof sourcesData.useDocuments === 'boolean' ? sourcesData.useDocuments : true,
+              useKnowledgeBase: typeof sourcesData.useKnowledgeBase === 'boolean' ? sourcesData.useKnowledgeBase : true,
+              useExternalSearch: typeof sourcesData.useExternalSearch === 'boolean' ? sourcesData.useExternalSearch : false
+            };
+          }
+        }
+      }
+      
+      // Call the create-assistant-completion edge function
+      const { data, error } = await supabase.functions.invoke('create-assistant-completion', {
+        body: {
+          prompt: message,
+          model: model,
+          temperature: 0.7,
+          top_p: 1,
+          max_tokens: 2048,
+          instructions: "You are a helpful assistant that provides accurate and concise information.",
+          sources: sourcesSettings,
+          documentIds: [] // Add document IDs here if needed
+        }
+      });
+      
+      if (error) {
+        throw new Error(`Edge function error: ${error.message}`);
+      }
+      
+      // Extract the assistant's response
+      const assistantContent = data?.choices?.[0]?.message?.content || 
+                              "I'm sorry, I couldn't process your request at this time.";
+      
+      // Add the assistant response to messages
       const assistantResponse: Message = {
         id: v4(),
-        content: `I've processed your request: "${message}"\n\nHere's a simulated response with some information that would be retrieved from your uploaded documents and knowledge base.`,
+        content: assistantContent,
         role: 'assistant',
         timestamp: new Date()
       };
       
       setMessages(prev => [...prev, assistantResponse]);
       
-      // Add simulated sources
-      const newSources: Source[] = [
-        {
-          id: v4(),
-          title: "Introduction to RAG Systems",
-          content: "Retrieval-Augmented Generation (RAG) is an AI framework that enhances large language model outputs by retrieving relevant information from external sources before generating a response.",
-          documentName: "AI Architecture Guide.pdf",
-          relevanceScore: 95
-        },
-        {
-          id: v4(),
-          title: "Implementing Vector Databases",
-          content: "Vector databases store embeddings, which are numerical representations of data like text, images, or audio that capture semantic meaning, allowing for similarity-based information retrieval.",
-          documentName: "AI Architecture Guide.pdf",
-          relevanceScore: 82
-        },
-        {
-          id: v4(),
-          title: "Query Processing in RAG",
-          content: "When a query is submitted to a RAG system, it is first encoded into a vector representation, then similar vectors are retrieved from the database, and finally used to augment the context for generation.",
-          documentName: "System Design Document.docx",
-          relevanceScore: 67
-        }
-      ];
-      
-      setSources(newSources);
+      // Generate sources if needed (this is a placeholder - in a real implementation,
+      // sources would come from the AI service or your vector database)
+      if (sourcesSettings.useDocuments) {
+        const newSources: Source[] = [
+          {
+            id: v4(),
+            title: "Introduction to RAG Systems",
+            content: "Retrieval-Augmented Generation (RAG) is an AI framework that enhances large language model outputs by retrieving relevant information from external sources before generating a response.",
+            documentName: "AI Architecture Guide.pdf",
+            relevanceScore: 95
+          },
+          {
+            id: v4(),
+            title: "Implementing Vector Databases",
+            content: "Vector databases store embeddings, which are numerical representations of data like text, images, or audio that capture semantic meaning, allowing for similarity-based information retrieval.",
+            documentName: "AI Architecture Guide.pdf",
+            relevanceScore: 82
+          }
+        ];
+        
+        setSources(newSources);
+      }
       
     } catch (error) {
       console.error('Error processing message:', error);
