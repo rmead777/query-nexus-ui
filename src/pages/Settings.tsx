@@ -556,7 +556,6 @@ const Settings = () => {
       provider: providerValue
     });
     
-    // Set a default template for this provider
     const providerTemplate = defaultRequestTemplates.find(t => t.provider === providerValue);
     if (providerTemplate) {
       setAdvancedSettings({
@@ -949,4 +948,148 @@ const Settings = () => {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label htmlFor="use-azure" className="text-sm font-normal">Enable Azure</
+                    <Label htmlFor="use-azure" className="text-sm font-normal">Enable Azure</Label>
+                    <Switch defaultChecked={useAzure} onCheckedChange={setUseAzure} />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="azure-endpoint">Azure Endpoint</Label>
+                    <Input
+                      id="azure-endpoint"
+                      value={azureSettings.endpointUrl}
+                      onChange={(e) => setAzureSettings({...azureSettings, endpointUrl: e.target.value})}
+                      placeholder="https://your-azure-endpoint.com"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="azure-deployment">Azure Deployment</Label>
+                    <Input
+                      id="azure-deployment"
+                      value={azureSettings.deploymentName}
+                      onChange={(e) => setAzureSettings({...azureSettings, deploymentName: e.target.value})}
+                      placeholder="your-deployment-name"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="azure-search-endpoint">Azure Search Endpoint</Label>
+                    <Input
+                      id="azure-search-endpoint"
+                      value={azureSettings.searchEndpoint}
+                      onChange={(e) => setAzureSettings({...azureSettings, searchEndpoint: e.target.value})}
+                      placeholder="https://your-azure-search-endpoint.com"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="azure-search-key">Azure Search Key</Label>
+                    <div className="relative">
+                      <Input
+                        id="azure-search-key"
+                        type={showAzureKey ? "text" : "password"}
+                        value={azureSettings.searchKey}
+                        onChange={(e) => setAzureSettings({...azureSettings, searchKey: e.target.value})}
+                        placeholder="Your Azure Search Key"
+                        className="pr-10"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-10 w-10"
+                        onClick={() => setShowAzureKey(!showAzureKey)}
+                      >
+                        {showAzureKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">
+                          {showAzureKey ? "Hide Azure Search Key" : "Show Azure Search Key"}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="azure-search-index">Azure Search Index</Label>
+                    <Input
+                      id="azure-search-index"
+                      value={azureSettings.searchIndexName}
+                      onChange={(e) => setAzureSettings({...azureSettings, searchIndexName: e.target.value})}
+                      placeholder="your-search-index-name"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="azure-api-key">Azure API Key</Label>
+                    <div className="relative">
+                      <Input
+                        id="azure-api-key"
+                        type={showSearchKey ? "text" : "password"}
+                        value={azureSettings.apiKey}
+                        onChange={(e) => setAzureSettings({...azureSettings, apiKey: e.target.value})}
+                        placeholder="Your Azure API Key"
+                        className="pr-10"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-10 w-10"
+                        onClick={() => setShowSearchKey(!showSearchKey)}
+                      >
+                        {showSearchKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">
+                          {showSearchKey ? "Hide Azure API Key" : "Show Azure API Key"}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Info className="h-4 w-4" />
+                  <span>Optional integration with Azure OpenAI API and Cognitive Search</span>
+                </div>
+                <Button 
+                  onClick={() => handleSaveSettings('azure')}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Settings
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="endpoints" className="space-y-6 animate-fade-in">
+            {/* Endpoints tab content would go here */}
+          </TabsContent>
+          
+          <TabsContent value="advanced" className="space-y-6 animate-fade-in">
+            {/* Advanced tab content would go here */}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </MainLayout>
+  );
+};
+
+export default Settings;
