@@ -1354,7 +1354,8 @@ const Settings = () => {
                         </Alert>
                         
                         <RequestTemplateEditor
-                          value={advancedSettings.requestTemplate || {}}
+                          initialValue={advancedSettings.requestTemplate}
+                          provider={newEndpoint.provider || 'OpenAI'}
                           onChange={(value) => setAdvancedSettings({...advancedSettings, requestTemplate: value})}
                         />
                       </div>
