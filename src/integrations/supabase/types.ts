@@ -9,6 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      api_endpoints: {
+        Row: {
+          api_endpoint: string | null
+          api_key: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          model: string | null
+          name: string
+          provider: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_endpoint?: string | null
+          api_key?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          model?: string | null
+          name: string
+          provider: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_endpoint?: string | null
+          api_key?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          model?: string | null
+          name?: string
+          provider?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       assistant_functions: {
         Row: {
           assistant_id: string
