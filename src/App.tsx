@@ -23,7 +23,7 @@ const SettingsWithTabRedirect = () => {
   const searchParams = new URLSearchParams(location.search);
   const tab = searchParams.get('tab');
   
-  if (tab && (tab === 'preferences' || tab === 'api')) {
+  if (tab && ['preferences', 'api'].includes(tab)) {
     // Tab parameter exists and is valid, just render Settings
     return <Settings />;
   }

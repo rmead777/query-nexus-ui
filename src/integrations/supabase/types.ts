@@ -121,30 +121,96 @@ export type Database = {
         }
         Relationships: []
       }
+      conversations: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_favorite: boolean | null
+          message_count: number
+          messages: Json
+          preview: string
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_favorite?: boolean | null
+          message_count: number
+          messages: Json
+          preview: string
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_favorite?: boolean | null
+          message_count?: number
+          messages?: Json
+          preview?: string
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      documents: {
+        Row: {
+          id: string
+          name: string
+          size: number
+          type: string
+          upload_date: string | null
+          url: string
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          size: number
+          type: string
+          upload_date?: string | null
+          url: string
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          size?: number
+          type?: string
+          upload_date?: string | null
+          url?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
-          created_at: string
+          created_at: string | null
+          email: string | null
           first_name: string | null
-          id: string
           last_name: string | null
-          updated_at: string
+          updated_at: string | null
+          user_id: string
         }
         Insert: {
           avatar_url?: string | null
-          created_at?: string
+          created_at?: string | null
+          email?: string | null
           first_name?: string | null
-          id: string
           last_name?: string | null
-          updated_at?: string
+          updated_at?: string | null
+          user_id: string
         }
         Update: {
           avatar_url?: string | null
-          created_at?: string
+          created_at?: string | null
+          email?: string | null
           first_name?: string | null
-          id?: string
           last_name?: string | null
-          updated_at?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }

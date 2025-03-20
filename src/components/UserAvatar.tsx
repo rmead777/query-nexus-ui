@@ -55,7 +55,7 @@ export function UserAvatar() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate('/settings')}>
+        <DropdownMenuItem onClick={() => navigate('/settings?tab=preferences')}>
           Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
