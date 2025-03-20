@@ -60,10 +60,20 @@ serve(async (req) => {
       );
     }
 
+    // Extract content based on file type
+    let content = null;
+    
     // For text files, we can extract and store the content directly
-    if (document.type === 'txt' || document.type === 'text/plain') {
-      const content = await fileData.text();
-      
+    if (document.type === 'txt' || document.type === 'text/plain' || 
+        document.name.endsWith('.txt') || document.name.endsWith('.md')) {
+      content = await fileData.text();
+    }
+    // For other document types, we would typically use dedicated libraries
+    // This would require more complex processing with specialized libraries
+    // For now, we'll just handle text files, but this can be expanded
+    
+    // Only update if we extracted content
+    if (content) {
       // Update the document with the extracted content
       const { error: updateError } = await supabase
         .from('documents')
@@ -81,7 +91,11 @@ serve(async (req) => {
     
     // Return success response
     return new Response(
-      JSON.stringify({ success: true, message: 'Document processed successfully' }),
+      JSON.stringify({ 
+        success: true, 
+        message: 'Document processed successfully',
+        content_extracted: content !== null 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

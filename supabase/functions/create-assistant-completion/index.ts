@@ -27,6 +27,7 @@ serve(async (req) => {
       max_tokens, 
       instructions, 
       functions,
+      documentIds = [],
       sources = {
         useDocuments: true,
         useKnowledgeBase: true, 
@@ -34,7 +35,31 @@ serve(async (req) => {
       }
     } = await req.json();
 
-    // Modify system instructions based on source settings
+    // Create Supabase client to access documents if needed
+    let documentContent = "";
+    if (sources.useDocuments && documentIds && documentIds.length > 0) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      const supabase = createClient(supabaseUrl, supabaseServiceKey, { 
+        global: { headers: { Authorization: `Bearer ${supabaseServiceKey}` } } 
+      });
+
+      // Fetch document content for the provided document IDs
+      const { data: documents, error } = await supabase
+        .from('documents')
+        .select('name, content')
+        .in('document_id', documentIds)
+        .not('content', 'is', null);
+
+      if (!error && documents && documents.length > 0) {
+        // Format document content for inclusion in the prompt
+        documentContent = documents.map(doc => {
+          return `--- Document: ${doc.name} ---\n${doc.content}\n\n`;
+        }).join("\n");
+      }
+    }
+
+    // Modify system instructions based on source settings and add document content
     let systemContent = instructions || "You are a helpful assistant.";
     
     if (sources.useDocuments && !sources.useKnowledgeBase && !sources.useExternalSearch) {
@@ -45,10 +70,21 @@ serve(async (req) => {
       systemContent += " Use information from provided documents, your knowledge base, and information from external searches to provide comprehensive answers.";
     }
 
+    // Create messages array, including document content if available
     const messages = [
-      { role: "system", content: systemContent },
-      { role: "user", content: prompt }
+      { role: "system", content: systemContent }
     ];
+
+    // Add document content as a system message if available
+    if (documentContent) {
+      messages.push({ 
+        role: "system", 
+        content: `Here are the relevant documents to use for answering the user's question:\n\n${documentContent}`
+      });
+    }
+
+    // Add the user's prompt
+    messages.push({ role: "user", content: prompt });
 
     const requestBody: any = {
       model: model || "gpt-4o-mini",
@@ -102,3 +138,6 @@ serve(async (req) => {
     );
   }
 });
+
+// Import the Supabase client
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
