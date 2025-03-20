@@ -151,7 +151,7 @@ const Settings = () => {
             model: settingsData.model || 'gpt-4o',
             temperature: settingsData.temperature || 0.7,
             maxTokens: settingsData.max_tokens || 1024,
-            instructions: settingsData.instructions || "You are a helpful assistant that provides accurate and concise information."
+            instructions: (settingsData as any).instructions || "You are a helpful assistant that provides accurate and concise information."
           });
           
           setSelectedModel(settingsData.model || 'gpt-4o');
@@ -167,7 +167,7 @@ const Settings = () => {
           
           setUseAzure(settingsData.use_azure || false);
           
-          if (settingsData.response_sources) {
+          if ((settingsData as any).response_sources) {
             const sourcesData = settingsData.response_sources as Record<string, unknown>;
             const typedSources: ResponseSourceSettings = {
               useDocuments: typeof sourcesData.useDocuments === 'boolean' ? sourcesData.useDocuments : true,
@@ -177,10 +177,10 @@ const Settings = () => {
             setResponseSources(typedSources);
           }
           
-          if (settingsData.request_template) {
+          if ((settingsData as any).request_template) {
             setAdvancedSettings({
               ...advancedSettings,
-              requestTemplate: settingsData.request_template
+              requestTemplate: (settingsData as any).request_template
             });
           }
         }
@@ -1093,3 +1093,4 @@ const Settings = () => {
 };
 
 export default Settings;
+

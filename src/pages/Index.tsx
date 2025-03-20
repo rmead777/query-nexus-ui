@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -52,7 +51,6 @@ const Index = () => {
     setIsLoading(true);
     
     try {
-      // First, fetch user settings to get API endpoint, key, model, etc.
       let apiEndpoint = null;
       let apiKey = null;
       let model = 'gpt-4o-mini';
@@ -81,11 +79,8 @@ const Index = () => {
           temperature = settingsData.temperature || 0.7;
           maxTokens = settingsData.max_tokens || 2048;
           
-          // Check for instructions, added safely with optional chaining
-          instructions = settingsData.instructions || instructions;
-          
-          // Check for request_template, added safely with optional chaining
-          requestTemplate = settingsData.request_template || null;
+          instructions = (settingsData as any).instructions || instructions;
+          requestTemplate = (settingsData as any).request_template || null;
           
           if (settingsData.response_sources) {
             const sourcesData = settingsData.response_sources as Record<string, unknown>;
@@ -97,7 +92,6 @@ const Index = () => {
           }
         }
         
-        // Get provider info from active endpoint if available
         const { data: endpointData } = await supabase
           .from('api_endpoints')
           .select('*')
@@ -108,14 +102,12 @@ const Index = () => {
         if (endpointData) {
           provider = endpointData.provider || 'OpenAI';
           
-          // If endpoint has a custom request template, use it - safely with optional chaining
-          if (endpointData.request_template) {
-            requestTemplate = endpointData.request_template;
+          if ((endpointData as any).request_template) {
+            requestTemplate = (endpointData as any).request_template;
           }
         }
       }
       
-      // Call the create-assistant-completion edge function
       const { data, error } = await supabase.functions.invoke('create-assistant-completion', {
         body: {
           prompt: message,
@@ -125,7 +117,7 @@ const Index = () => {
           max_tokens: maxTokens,
           instructions: instructions,
           sources: sourcesSettings,
-          documentIds: [], // Add document IDs here if needed
+          documentIds: [],
           requestTemplate: requestTemplate,
           apiEndpoint: apiEndpoint,
           apiKey: apiKey,
@@ -137,11 +129,9 @@ const Index = () => {
         throw new Error(`Edge function error: ${error.message}`);
       }
       
-      // Extract the assistant's response based on provider format
       let assistantContent = "";
       
       if (requestTemplate) {
-        // Handle different response formats based on provider
         if (provider === 'OpenAI' || provider === 'Custom') {
           assistantContent = data?.choices?.[0]?.message?.content || 
                            "I'm sorry, I couldn't process your request at this time.";
@@ -155,7 +145,6 @@ const Index = () => {
           assistantContent = data?.text || 
                            "I'm sorry, I couldn't process your request at this time.";
         } else {
-          // Default fallback - try to extract content from common response formats
           assistantContent = data?.choices?.[0]?.message?.content || 
                            data?.content?.[0]?.text ||
                            data?.text ||
@@ -163,12 +152,10 @@ const Index = () => {
                            "I'm sorry, I couldn't process your request at this time.";
         }
       } else {
-        // Default OpenAI format
         assistantContent = data?.choices?.[0]?.message?.content || 
                           "I'm sorry, I couldn't process your request at this time.";
       }
       
-      // Add the assistant response to messages
       const assistantResponse: Message = {
         id: v4(),
         content: assistantContent,
@@ -178,8 +165,6 @@ const Index = () => {
       
       setMessages(prev => [...prev, assistantResponse]);
       
-      // Generate sources if needed (this is a placeholder - in a real implementation,
-      // sources would come from the AI service or your vector database)
       if (sourcesSettings.useDocuments) {
         const newSources: Source[] = [
           {
