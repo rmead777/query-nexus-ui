@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -474,8 +475,8 @@ const Settings = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
           <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            <TabsTrigger value="api">API Configuration</TabsTrigger>
-            <TabsTrigger value="endpoints">API Endpoints</TabsTrigger>
+            <TabsTrigger value="api">API Settings</TabsTrigger>
+            <TabsTrigger value="endpoints">API Keys & Endpoints</TabsTrigger>
           </TabsList>
           
           <TabsContent value="preferences" className="animate-fade-in space-y-6">
@@ -1165,4 +1166,3 @@ const Settings = () => {
 };
 
 export default Settings;
-
