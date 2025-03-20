@@ -60,6 +60,8 @@ serve(async (req) => {
       provider
     } = await req.json();
 
+    console.log("Processing request with documents:", documentIds);
+
     // Create Supabase client to access documents if needed
     let documentContent = "";
     if (sources.useDocuments && documentIds && documentIds.length > 0) {
@@ -75,11 +77,19 @@ serve(async (req) => {
         .in('document_id', documentIds)
         .not('content', 'is', null);
 
+      if (error) {
+        console.error("Error fetching documents:", error);
+      }
+
       if (!error && documents && documents.length > 0) {
+        console.log(`Found ${documents.length} documents for context`);
+        
         // Format document content for inclusion in the prompt
         documentContent = documents.map(doc => {
           return `--- Document: ${doc.name} ---\n${doc.content}\n\n`;
         }).join("\n");
+      } else {
+        console.log("No document content found for IDs:", documentIds);
       }
     }
 
@@ -127,6 +137,7 @@ serve(async (req) => {
 
       // Add document content as a system message if available
       if (documentContent) {
+        console.log("Adding document content to the prompt");
         messages.push({ 
           role: "system", 
           content: `Here are the relevant documents to use for answering the user's question:\n\n${documentContent}`
@@ -215,7 +226,19 @@ serve(async (req) => {
     
     console.log("AI provider response:", JSON.stringify(data, null, 2));
 
-    return new Response(JSON.stringify(data), {
+    // Prepare response with sources information
+    let responseData = data;
+    
+    // If we have document content, add sources information
+    if (documentContent && documentIds.length > 0) {
+      responseData = {
+        ...data,
+        documentIdsUsed: documentIds,
+        hasDocumentContext: true
+      };
+    }
+
+    return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

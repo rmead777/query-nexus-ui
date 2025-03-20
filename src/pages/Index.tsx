@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatOutput } from '@/components/chat/ChatOutput';
@@ -36,9 +35,34 @@ const Index = () => {
   const [sources, setSources] = useState<Source[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
+  const [userDocuments, setUserDocuments] = useState<any[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  
+  useEffect(() => {
+    if (user) {
+      fetchUserDocuments();
+    }
+  }, [user]);
+  
+  const fetchUserDocuments = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('document_id, name')
+        .eq('user_id', user.id)
+        .order('upload_date', { ascending: false });
+        
+      if (error) throw error;
+      
+      setUserDocuments(data || []);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    }
+  };
   
   const handleSendMessage = async (message: string) => {
     const newMessage: Message = {
@@ -112,9 +136,12 @@ const Index = () => {
         }
       }
       
+      const documentIds = userDocuments.length > 0 ? userDocuments.map(doc => doc.document_id) : [];
+      
       console.log("Sending request with provider:", provider);
       console.log("API Endpoint:", apiEndpoint);
       console.log("Model:", model);
+      console.log("Using documents:", documentIds.length);
       
       const { data, error } = await supabase.functions.invoke('create-assistant-completion', {
         body: {
@@ -125,7 +152,7 @@ const Index = () => {
           max_tokens: maxTokens,
           instructions: instructions,
           sources: sourcesSettings,
-          documentIds: [],
+          documentIds: documentIds,
           requestTemplate: requestTemplate,
           apiEndpoint: apiEndpoint,
           apiKey: apiKey,
@@ -153,7 +180,6 @@ const Index = () => {
         assistantContent = data?.text || 
                          "I'm sorry, I couldn't process your request at this time.";
       } else if (provider === 'Custom') {
-        // Try various response formats for custom providers
         assistantContent = data?.choices?.[0]?.message?.content || 
                          data?.content?.[0]?.text ||
                          data?.text ||
@@ -163,7 +189,6 @@ const Index = () => {
                          data?.answer ||
                          "I'm sorry, I couldn't process your request at this time.";
       } else {
-        // Default fallback for unknown providers
         assistantContent = data?.choices?.[0]?.message?.content || 
                          data?.content?.[0]?.text ||
                          data?.text ||
@@ -180,25 +205,36 @@ const Index = () => {
       
       setMessages(prev => [...prev, assistantResponse]);
       
-      if (sourcesSettings.useDocuments) {
-        const newSources: Source[] = [
-          {
-            id: v4(),
-            title: "Introduction to RAG Systems",
-            content: "Retrieval-Augmented Generation (RAG) is an AI framework that enhances large language model outputs by retrieving relevant information from external sources before generating a response.",
-            documentName: "AI Architecture Guide.pdf",
-            relevanceScore: 95
-          },
-          {
-            id: v4(),
-            title: "Implementing Vector Databases",
-            content: "Vector databases store embeddings, which are numerical representations of data like text, images, or audio that capture semantic meaning, allowing for similarity-based information retrieval.",
-            documentName: "AI Architecture Guide.pdf",
-            relevanceScore: 82
-          }
-        ];
+      if (data.sources && Array.isArray(data.sources)) {
+        setSources(data.sources);
+      } else if (sourcesSettings.useDocuments && documentIds.length > 0) {
+        const documentSources: Source[] = [];
         
-        setSources(newSources);
+        for (const docId of documentIds) {
+          try {
+            const { data: docData } = await supabase
+              .from('documents')
+              .select('name, content')
+              .eq('document_id', docId)
+              .single();
+              
+            if (docData && docData.content) {
+              documentSources.push({
+                id: v4(),
+                title: docData.name,
+                content: docData.content,
+                documentName: docData.name,
+                relevanceScore: 95
+              });
+            }
+          } catch (docError) {
+            console.error('Error fetching document content:', docError);
+          }
+        }
+        
+        if (documentSources.length > 0) {
+          setSources(documentSources);
+        }
       }
       
     } catch (error) {
@@ -219,6 +255,7 @@ const Index = () => {
       description: `Successfully uploaded ${files.length} document${files.length === 1 ? '' : 's'}.`,
     });
     setShowDocumentUpload(false);
+    fetchUserDocuments();
   };
   
   return (
