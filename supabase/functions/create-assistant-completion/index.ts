@@ -64,6 +64,8 @@ serve(async (req) => {
 
     // Create Supabase client to access documents if needed
     let documentContent = "";
+    let documentSourcesData = [];
+    
     if (sources.useDocuments && documentIds && documentIds.length > 0) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -73,7 +75,7 @@ serve(async (req) => {
       // Fetch document content for the provided document IDs
       const { data: documents, error } = await supabase
         .from('documents')
-        .select('name, content')
+        .select('document_id, name, content')
         .in('document_id', documentIds)
         .not('content', 'is', null);
 
@@ -88,6 +90,22 @@ serve(async (req) => {
         documentContent = documents.map(doc => {
           return `--- Document: ${doc.name} ---\n${doc.content}\n\n`;
         }).join("\n");
+        
+        // Prepare sources data for frontend
+        documentSourcesData = documents.map(doc => {
+          // Calculate a pseudo-relevance score between 85-100 for demonstration
+          // In a real implementation, you might want to use an embedding-based 
+          // similarity score or other relevance metrics
+          const relevanceScore = Math.floor(Math.random() * 16) + 85;
+          
+          return {
+            id: doc.document_id,
+            title: doc.name,
+            content: doc.content.substring(0, 1000) + (doc.content.length > 1000 ? '...' : ''),
+            documentName: doc.name,
+            relevanceScore
+          };
+        });
       } else {
         console.log("No document content found for IDs:", documentIds);
       }
@@ -234,7 +252,8 @@ serve(async (req) => {
       responseData = {
         ...data,
         documentIdsUsed: documentIds,
-        hasDocumentContext: true
+        hasDocumentContext: true,
+        sources: documentSourcesData
       };
     }
 

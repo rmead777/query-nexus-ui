@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -10,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useToast } from "@/components/ui/use-toast";
 import { v4 } from '@/lib/uuid';
 import { useNavigate } from 'react-router-dom';
-import { Settings } from 'lucide-react';
+import { Settings, FileText, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -19,6 +20,9 @@ import {
   ResizableHandle
 } from '@/components/ui/resizable';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from '@/components/ui/label';
 
 interface Message {
   id: string;
@@ -36,12 +40,20 @@ interface Source {
   relevanceScore: number; 
 }
 
+interface UserDocument {
+  document_id: string;
+  name: string;
+  selected?: boolean;
+}
+
 const Index = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
-  const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [userDocuments, setUserDocuments] = useState<UserDocument[]>([]);
+  const [showDocumentSelector, setShowDocumentSelector] = useState(false);
+  const [documentSourceMode, setDocumentSourceMode] = useState<'all' | 'selected'>('all');
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -65,7 +77,7 @@ const Index = () => {
         
       if (error) throw error;
       
-      setUserDocuments(data || []);
+      setUserDocuments(data?.map(doc => ({...doc, selected: true})) || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
     }
@@ -143,7 +155,15 @@ const Index = () => {
         }
       }
       
-      const documentIds = userDocuments.length > 0 ? userDocuments.map(doc => doc.document_id) : [];
+      // Get selected document IDs based on mode
+      let documentIds: string[] = [];
+      if (documentSourceMode === 'all') {
+        documentIds = userDocuments.map(doc => doc.document_id);
+      } else {
+        documentIds = userDocuments
+          .filter(doc => doc.selected)
+          .map(doc => doc.document_id);
+      }
       
       console.log("Sending request with provider:", provider);
       console.log("API Endpoint:", apiEndpoint);
@@ -265,6 +285,28 @@ const Index = () => {
     fetchUserDocuments();
   };
   
+  const toggleDocumentSelection = (documentId: string) => {
+    setUserDocuments(prevDocs => 
+      prevDocs.map(doc => 
+        doc.document_id === documentId 
+          ? { ...doc, selected: !doc.selected } 
+          : doc
+      )
+    );
+  };
+  
+  const selectAllDocuments = () => {
+    setUserDocuments(prevDocs => 
+      prevDocs.map(doc => ({ ...doc, selected: true }))
+    );
+  };
+  
+  const deselectAllDocuments = () => {
+    setUserDocuments(prevDocs => 
+      prevDocs.map(doc => ({ ...doc, selected: false }))
+    );
+  };
+  
   return (
     <MainLayout>
       <div className="flex flex-col h-[calc(100vh-48px)]">
@@ -278,7 +320,17 @@ const Index = () => {
           <ResizablePanelGroup direction="horizontal" className="h-full">
             <ResizablePanel defaultSize={75} minSize={50}>
               <div className="flex flex-col h-full">
-                <div className="flex justify-end mb-4 pr-4">
+                <div className="flex justify-between mb-4 pr-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex items-center gap-1.5 ml-4"
+                    onClick={() => setShowDocumentSelector(prev => !prev)}
+                  >
+                    <FileText className="h-4 w-4" />
+                    <span className="text-xs font-normal">Select Documents</span>
+                  </Button>
+                  
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button 
@@ -298,6 +350,60 @@ const Index = () => {
                     </TooltipContent>
                   </Tooltip>
                 </div>
+                
+                {showDocumentSelector && (
+                  <div className="mx-4 mb-4 p-4 border border-border rounded-lg bg-card/50 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-sm font-medium">Document Sources</h3>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={selectAllDocuments} className="h-7 text-xs">Select All</Button>
+                        <Button variant="ghost" size="sm" onClick={deselectAllDocuments} className="h-7 text-xs">Deselect All</Button>
+                      </div>
+                    </div>
+                    
+                    <RadioGroup 
+                      value={documentSourceMode} 
+                      onValueChange={(value) => setDocumentSourceMode(value as 'all' | 'selected')}
+                      className="mb-3 space-y-1"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="all" id="all-docs" />
+                        <Label htmlFor="all-docs" className="text-sm font-normal">Use all documents</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="selected" id="selected-docs" />
+                        <Label htmlFor="selected-docs" className="text-sm font-normal">Use only selected documents</Label>
+                      </div>
+                    </RadioGroup>
+                    
+                    {documentSourceMode === 'selected' && (
+                      <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
+                        {userDocuments.length > 0 ? (
+                          userDocuments.map((doc) => (
+                            <div key={doc.document_id} className="flex items-center space-x-2">
+                              <Checkbox 
+                                id={doc.document_id} 
+                                checked={doc.selected} 
+                                onCheckedChange={() => toggleDocumentSelection(doc.document_id)}
+                              />
+                              <label
+                                htmlFor={doc.document_id}
+                                className="text-sm font-normal leading-none truncate"
+                              >
+                                {doc.name}
+                              </label>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-sm text-muted-foreground">
+                            No documents found. Upload documents from the Documents page.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div className="flex-1 overflow-y-auto subtle-scroll pb-10">
                   <ChatOutput messages={messages} isLoading={isLoading} />
                 </div>
