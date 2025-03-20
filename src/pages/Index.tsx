@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -101,12 +102,19 @@ const Index = () => {
           
         if (endpointData) {
           provider = endpointData.provider || 'OpenAI';
+          apiEndpoint = endpointData.api_endpoint;
+          apiKey = endpointData.api_key;
+          model = endpointData.model || model;
           
           if ((endpointData as any).request_template) {
             requestTemplate = (endpointData as any).request_template;
           }
         }
       }
+      
+      console.log("Sending request with provider:", provider);
+      console.log("API Endpoint:", apiEndpoint);
+      console.log("Model:", model);
       
       const { data, error } = await supabase.functions.invoke('create-assistant-completion', {
         body: {
@@ -130,30 +138,37 @@ const Index = () => {
       }
       
       let assistantContent = "";
+      console.log("Response data:", data);
       
-      if (requestTemplate) {
-        if (provider === 'OpenAI' || provider === 'Custom') {
-          assistantContent = data?.choices?.[0]?.message?.content || 
-                           "I'm sorry, I couldn't process your request at this time.";
-        } else if (provider === 'Anthropic') {
-          assistantContent = data?.content?.[0]?.text || 
-                           "I'm sorry, I couldn't process your request at this time.";
-        } else if (provider === 'Google') {
-          assistantContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || 
-                           "I'm sorry, I couldn't process your request at this time.";
-        } else if (provider === 'Cohere') {
-          assistantContent = data?.text || 
-                           "I'm sorry, I couldn't process your request at this time.";
-        } else {
-          assistantContent = data?.choices?.[0]?.message?.content || 
-                           data?.content?.[0]?.text ||
-                           data?.text ||
-                           data?.response ||
-                           "I'm sorry, I couldn't process your request at this time.";
-        }
-      } else {
+      if (provider === 'OpenAI') {
         assistantContent = data?.choices?.[0]?.message?.content || 
-                          "I'm sorry, I couldn't process your request at this time.";
+                         "I'm sorry, I couldn't process your request at this time.";
+      } else if (provider === 'Anthropic') {
+        assistantContent = data?.content?.[0]?.text || 
+                         "I'm sorry, I couldn't process your request at this time.";
+      } else if (provider === 'Google') {
+        assistantContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || 
+                         "I'm sorry, I couldn't process your request at this time.";
+      } else if (provider === 'Cohere') {
+        assistantContent = data?.text || 
+                         "I'm sorry, I couldn't process your request at this time.";
+      } else if (provider === 'Custom') {
+        // Try various response formats for custom providers
+        assistantContent = data?.choices?.[0]?.message?.content || 
+                         data?.content?.[0]?.text ||
+                         data?.text ||
+                         data?.response ||
+                         data?.output ||
+                         data?.result ||
+                         data?.answer ||
+                         "I'm sorry, I couldn't process your request at this time.";
+      } else {
+        // Default fallback for unknown providers
+        assistantContent = data?.choices?.[0]?.message?.content || 
+                         data?.content?.[0]?.text ||
+                         data?.text ||
+                         data?.response ||
+                         "I'm sorry, I couldn't process your request at this time.";
       }
       
       const assistantResponse: Message = {

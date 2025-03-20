@@ -136,6 +136,7 @@ serve(async (req) => {
       // Add the user's prompt
       messages.push({ role: "user", content: prompt });
 
+      // Default OpenAI request format
       requestBody = {
         model: model || "gpt-4o-mini",
         messages,
@@ -153,6 +154,31 @@ serve(async (req) => {
             parameters: func.parameters || { type: "object", properties: {} }
           }
         }));
+      }
+    }
+
+    // Adjust request based on provider if using custom provider with specific endpoint
+    if (provider === "Custom") {
+      // Check if endpoint contains 'azure' in the URL, which might indicate Azure OpenAI
+      if (endpoint.includes("azure")) {
+        // Azure OpenAI service requires different parameter names
+        console.log("Using Azure OpenAI format");
+        // No changes needed here - Azure now uses the same format as OpenAI
+      } else if (endpoint.includes("responses")) {
+        // This appears to be a custom endpoint that might require 'input' parameter
+        console.log("Using custom responses endpoint format");
+        
+        // If no custom template, convert to expected format
+        if (!requestTemplate) {
+          // Add 'input' parameter required by some APIs
+          requestBody = {
+            input: prompt,
+            model: model || "gpt-4o-mini",
+            instructions: systemContent,
+            temperature: temperature !== undefined ? temperature : 0.7,
+            max_tokens: max_tokens || 2048
+          };
+        }
       }
     }
 
