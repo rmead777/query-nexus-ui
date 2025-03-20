@@ -32,7 +32,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ApiEndpoint } from '@/types/api';
+import { ApiEndpoint, ModelOption } from '@/types/api';
 
 interface ResponseSourceSettings {
   useDocuments: boolean;
@@ -75,6 +75,21 @@ const Settings = () => {
     model: '',
     provider: 'OpenAI'
   });
+  
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([
+    { value: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', provider: 'OpenAI' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', provider: 'OpenAI' },
+    { value: 'claude-3-opus', label: 'Claude 3 Opus', provider: 'Anthropic' },
+    { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet', provider: 'Anthropic' },
+    { value: 'claude-3-haiku', label: 'Claude 3 Haiku', provider: 'Anthropic' },
+    { value: 'gemini-pro', label: 'Gemini Pro', provider: 'Google' },
+    { value: 'gemini-ultra', label: 'Gemini Ultra', provider: 'Google' },
+    { value: 'command-r', label: 'Command R', provider: 'Cohere' },
+    { value: 'command-r-plus', label: 'Command R+', provider: 'Cohere' },
+  ]);
+  
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAzureKey, setShowAzureKey] = useState(false);
@@ -121,6 +136,8 @@ const Settings = () => {
             temperature: settingsData.temperature || 0.7,
             maxTokens: settingsData.max_tokens || 1024
           });
+          
+          setSelectedModel(settingsData.model || 'gpt-4o');
           
           setAzureSettings({
             endpointUrl: settingsData.azure_endpoint_url || '',
@@ -177,6 +194,28 @@ const Settings = () => {
         apiKey: selectedEndpoint.api_key || '',
         model: selectedEndpoint.model || 'gpt-4o'
       });
+      
+      setSelectedModel(selectedEndpoint.model || null);
+    }
+  };
+  
+  const handleModelSelect = (modelValue: string) => {
+    setSelectedModel(modelValue);
+    setApiSettings({
+      ...apiSettings,
+      model: modelValue
+    });
+    
+    const endpointWithModel = apiEndpoints.find(endpoint => endpoint.model === modelValue);
+    if (endpointWithModel) {
+      setApiSettings({
+        ...apiSettings,
+        endpoint: endpointWithModel.api_endpoint || 'https://api.openai.com/v1',
+        apiKey: endpointWithModel.api_key || '',
+        model: modelValue
+      });
+      
+      setSelectedEndpointId(endpointWithModel.id);
     }
   };
   
@@ -704,6 +743,25 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
+                    <Label htmlFor="model-select">Model</Label>
+                    <Select
+                      value={selectedModel || undefined}
+                      onValueChange={handleModelSelect}
+                    >
+                      <SelectTrigger id="model-select">
+                        <SelectValue placeholder="Select a model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelOptions.map(model => (
+                          <SelectItem key={model.value} value={model.value}>
+                            {model.label} ({model.provider})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
                     <Label htmlFor="api-endpoint">API Endpoint</Label>
                     <Input
                       id="api-endpoint"
@@ -740,16 +798,6 @@ const Settings = () => {
                         </span>
                       </Button>
                     </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="model">Model</Label>
-                    <Input
-                      id="model"
-                      value={apiSettings.model}
-                      onChange={(e) => setApiSettings({...apiSettings, model: e.target.value})}
-                      placeholder="gpt-4o"
-                    />
                   </div>
                 </div>
               </CardContent>

@@ -10,3 +10,9 @@ export interface ApiEndpoint {
   created_at: string;
   updated_at: string;
 }
+
+export interface ModelOption {
+  value: string;
+  label: string;
+  provider: string;
+}
