@@ -170,6 +170,26 @@ const Settings = () => {
         if (!endpointsError && endpointsData) {
           setApiEndpoints(endpointsData);
           
+          const userModels: ModelOption[] = endpointsData
+            .filter(endpoint => endpoint.model)
+            .map(endpoint => ({
+              value: endpoint.model as string,
+              label: `${endpoint.name} (${endpoint.model})`,
+              provider: endpoint.provider
+            }));
+          
+          const allModelOptions = [...modelOptions];
+          
+          userModels.forEach(userModel => {
+            const existingModelIndex = allModelOptions.findIndex(m => m.value === userModel.value);
+            
+            if (existingModelIndex === -1) {
+              allModelOptions.push(userModel);
+            }
+          });
+          
+          setModelOptions(allModelOptions);
+          
           const activeEndpoint = endpointsData.find(endpoint => endpoint.is_active);
           if (activeEndpoint) {
             setSelectedEndpointId(activeEndpoint.id);
@@ -754,7 +774,7 @@ const Settings = () => {
                       <SelectContent>
                         {modelOptions.map(model => (
                           <SelectItem key={model.value} value={model.value}>
-                            {model.label} ({model.provider})
+                            {model.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
