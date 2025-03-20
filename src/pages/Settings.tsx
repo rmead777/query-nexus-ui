@@ -123,9 +123,16 @@ const Settings = () => {
           // Update Azure toggle
           setUseAzure(data.use_azure || false);
           
-          // Update response sources
+          // Update response sources with proper type checking
           if (data.response_sources) {
-            setResponseSources(data.response_sources as ResponseSourceSettings);
+            const sourcesData = data.response_sources as Record<string, unknown>;
+            // Create a properly typed object with defaults for any missing properties
+            const typedSources: ResponseSourceSettings = {
+              useDocuments: typeof sourcesData.useDocuments === 'boolean' ? sourcesData.useDocuments : true,
+              useKnowledgeBase: typeof sourcesData.useKnowledgeBase === 'boolean' ? sourcesData.useKnowledgeBase : true,
+              useExternalSearch: typeof sourcesData.useExternalSearch === 'boolean' ? sourcesData.useExternalSearch : false
+            };
+            setResponseSources(typedSources);
           }
         }
       } catch (error) {
