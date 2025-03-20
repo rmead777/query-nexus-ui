@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -168,6 +167,18 @@ const Settings = () => {
     
     loadUserSettings();
   }, [user]);
+  
+  const handleEndpointSelect = (endpointId: string) => {
+    const selectedEndpoint = apiEndpoints.find(endpoint => endpoint.id === endpointId);
+    if (selectedEndpoint) {
+      setApiSettings({
+        ...apiSettings,
+        endpoint: selectedEndpoint.api_endpoint || 'https://api.openai.com/v1',
+        apiKey: selectedEndpoint.api_key || '',
+        model: selectedEndpoint.model || 'gpt-4o'
+      });
+    }
+  };
   
   const handleSaveSettings = async (settingType: 'preferences' | 'api' | 'azure') => {
     if (!user) {
@@ -668,7 +679,13 @@ const Settings = () => {
                   </div>
                   {apiEndpoints.length > 0 && (
                     <div>
-                      <Select value={selectedEndpointId || undefined} onValueChange={handleSetActiveEndpoint}>
+                      <Select 
+                        value={selectedEndpointId || undefined} 
+                        onValueChange={(value) => {
+                          setSelectedEndpointId(value);
+                          handleEndpointSelect(value);
+                        }}
+                      >
                         <SelectTrigger className="w-[220px]">
                           <SelectValue placeholder="Select API endpoint" />
                         </SelectTrigger>
