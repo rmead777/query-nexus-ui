@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -9,39 +10,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { 
   BadgeCheck, 
-  BadgeX, 
-  CheckCircle, 
-  Eye, 
-  EyeOff, 
   Info, 
   KeyRound, 
   Save, 
   Settings as SettingsIcon,
   BookOpen,
   Brain,
-  Search
+  Search,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-
-interface APISettings {
-  endpoint: string;
-  apiKey: string;
-  model: string;
-  temperature: number;
-  maxTokens: number;
-}
-
-interface AzureSettings {
-  endpointUrl: string;
-  deploymentName: string;
-  searchEndpoint: string;
-  searchKey: string;
-  searchIndexName: string;
-  apiKey: string;
-}
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2 } from 'lucide-react';
 
 interface ResponseSourceSettings {
   useDocuments: boolean;
@@ -50,7 +34,7 @@ interface ResponseSourceSettings {
 }
 
 const Settings = () => {
-  const [apiSettings, setApiSettings] = useState<APISettings>({
+  const [apiSettings, setApiSettings] = useState({
     endpoint: 'https://api.openai.com/v1',
     apiKey: '',
     model: 'gpt-4o',
@@ -58,7 +42,7 @@ const Settings = () => {
     maxTokens: 1024
   });
   
-  const [azureSettings, setAzureSettings] = useState<AzureSettings>({
+  const [azureSettings, setAzureSettings] = useState({
     endpointUrl: '',
     deploymentName: '',
     searchEndpoint: '',
@@ -77,8 +61,11 @@ const Settings = () => {
   const [showAzureKey, setShowAzureKey] = useState(false);
   const [showSearchKey, setShowSearchKey] = useState(false);
   const [useAzure, setUseAzure] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<string>('preferences');
@@ -92,12 +79,162 @@ const Settings = () => {
     }
   }, [location]);
   
-  const handleSaveSettings = () => {
-    toast({
-      title: "Settings Saved",
-      description: "Your API settings have been saved successfully.",
-    });
+  // Load user settings from Supabase
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (error) {
+          console.log('No settings found or error:', error);
+          setLoading(false);
+          return;
+        }
+        
+        if (data) {
+          // Update API settings
+          setApiSettings({
+            endpoint: data.api_endpoint || 'https://api.openai.com/v1',
+            apiKey: data.api_key || '',
+            model: data.model || 'gpt-4o',
+            temperature: data.temperature || 0.7,
+            maxTokens: data.max_tokens || 1024
+          });
+          
+          // Update Azure settings
+          setAzureSettings({
+            endpointUrl: data.azure_endpoint_url || '',
+            deploymentName: data.azure_deployment_name || '',
+            searchEndpoint: data.azure_search_endpoint || '',
+            searchKey: data.azure_search_key || '',
+            searchIndexName: data.azure_search_index_name || '',
+            apiKey: data.azure_api_key || ''
+          });
+          
+          // Update Azure toggle
+          setUseAzure(data.use_azure || false);
+          
+          // Update response sources
+          if (data.response_sources) {
+            setResponseSources(data.response_sources as ResponseSourceSettings);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadUserSettings();
+  }, [user]);
+  
+  const handleSaveSettings = async (settingType: 'preferences' | 'api' | 'azure') => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "You need to be logged in to save settings.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSaving(true);
+    
+    try {
+      // First check if the user already has settings
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      
+      // Prepare the data to save based on the setting type
+      let settingsData = {};
+      
+      if (settingType === 'preferences') {
+        settingsData = {
+          response_sources: responseSources,
+          updated_at: new Date().toISOString()
+        };
+      } else if (settingType === 'api') {
+        settingsData = {
+          api_endpoint: apiSettings.endpoint,
+          api_key: apiSettings.apiKey,
+          model: apiSettings.model,
+          temperature: apiSettings.temperature,
+          max_tokens: apiSettings.maxTokens,
+          updated_at: new Date().toISOString()
+        };
+      } else if (settingType === 'azure') {
+        settingsData = {
+          use_azure: useAzure,
+          azure_endpoint_url: azureSettings.endpointUrl,
+          azure_deployment_name: azureSettings.deploymentName,
+          azure_api_key: azureSettings.apiKey,
+          azure_search_endpoint: azureSettings.searchEndpoint,
+          azure_search_key: azureSettings.searchKey,
+          azure_search_index_name: azureSettings.searchIndexName,
+          updated_at: new Date().toISOString()
+        };
+      }
+      
+      // Insert or update settings based on whether they already exist
+      if (error || !data) {
+        // No settings exist yet, so insert
+        const { error: insertError } = await supabase
+          .from('user_settings')
+          .insert([{
+            user_id: user.id,
+            ...settingsData
+          }]);
+          
+        if (insertError) throw insertError;
+      } else {
+        // Settings exist, so update
+        const { error: updateError } = await supabase
+          .from('user_settings')
+          .update(settingsData)
+          .eq('user_id', user.id);
+          
+        if (updateError) throw updateError;
+      }
+      
+      toast({
+        title: "Settings Saved",
+        description: `Your ${settingType} settings have been saved successfully.`,
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
   };
+  
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2">Loading settings...</span>
+        </div>
+      </MainLayout>
+    );
+  }
   
   return (
     <MainLayout>
@@ -166,9 +303,22 @@ const Settings = () => {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button onClick={handleSaveSettings} className="ml-auto">
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Preferences
+                <Button 
+                  onClick={() => handleSaveSettings('preferences')}
+                  className="ml-auto"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Preferences
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </Card>
@@ -258,9 +408,22 @@ const Settings = () => {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button onClick={handleSaveSettings} className="ml-auto">
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Source Settings
+                <Button 
+                  onClick={() => handleSaveSettings('preferences')}
+                  className="ml-auto"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Source Settings
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </Card>
@@ -337,9 +500,21 @@ const Settings = () => {
                   <Info className="h-4 w-4" />
                   <span>Required for the application to function</span>
                 </div>
-                <Button onClick={handleSaveSettings}>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Settings
+                <Button 
+                  onClick={() => handleSaveSettings('api')}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Settings
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </Card>
@@ -485,9 +660,21 @@ const Settings = () => {
               )}
               
               <CardFooter className="flex justify-end">
-                <Button onClick={handleSaveSettings} disabled={!useAzure}>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Azure Settings
+                <Button 
+                  onClick={() => handleSaveSettings('azure')} 
+                  disabled={!useAzure || saving}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Azure Settings
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </Card>

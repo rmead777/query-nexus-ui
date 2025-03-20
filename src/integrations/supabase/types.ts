@@ -220,6 +220,66 @@ export type Database = {
         }
         Relationships: []
       }
+      user_settings: {
+        Row: {
+          api_endpoint: string | null
+          api_key: string | null
+          azure_api_key: string | null
+          azure_deployment_name: string | null
+          azure_endpoint_url: string | null
+          azure_search_endpoint: string | null
+          azure_search_index_name: string | null
+          azure_search_key: string | null
+          created_at: string | null
+          id: string
+          max_tokens: number | null
+          model: string | null
+          response_sources: Json | null
+          temperature: number | null
+          updated_at: string | null
+          use_azure: boolean | null
+          user_id: string
+        }
+        Insert: {
+          api_endpoint?: string | null
+          api_key?: string | null
+          azure_api_key?: string | null
+          azure_deployment_name?: string | null
+          azure_endpoint_url?: string | null
+          azure_search_endpoint?: string | null
+          azure_search_index_name?: string | null
+          azure_search_key?: string | null
+          created_at?: string | null
+          id?: string
+          max_tokens?: number | null
+          model?: string | null
+          response_sources?: Json | null
+          temperature?: number | null
+          updated_at?: string | null
+          use_azure?: boolean | null
+          user_id: string
+        }
+        Update: {
+          api_endpoint?: string | null
+          api_key?: string | null
+          azure_api_key?: string | null
+          azure_deployment_name?: string | null
+          azure_endpoint_url?: string | null
+          azure_search_endpoint?: string | null
+          azure_search_index_name?: string | null
+          azure_search_key?: string | null
+          created_at?: string | null
+          id?: string
+          max_tokens?: number | null
+          model?: string | null
+          response_sources?: Json | null
+          temperature?: number | null
+          updated_at?: string | null
+          use_azure?: boolean | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
