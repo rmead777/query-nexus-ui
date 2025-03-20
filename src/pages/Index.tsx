@@ -13,6 +13,12 @@ import { useNavigate } from 'react-router-dom';
 import { Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle
+} from '@/components/ui/resizable';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Message {
   id: string;
@@ -39,6 +45,7 @@ const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   
   useEffect(() => {
     if (user) {
@@ -259,43 +266,56 @@ const Index = () => {
   };
   
   return (
-    <MainLayout rightPanel={sources.length > 0 ? <SourcePanel sources={sources} /> : undefined}>
+    <MainLayout>
       <div className="flex flex-col h-[calc(100vh-48px)]">
-        <div className="flex-1 overflow-y-auto subtle-scroll pb-10">
-          {showDocumentUpload ? (
-            <Card className="max-w-xl w-full mx-auto my-10 p-6 animate-fade-in">
-              <DocumentUpload 
-                onUpload={handleFileUpload}
-              />
-            </Card>
-          ) : (
-            <>
-              <div className="flex justify-end mb-4 pr-4">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="flex items-center gap-1.5"
-                      onClick={() => navigate('/settings?tab=preferences')}
-                    >
-                      <Settings className="h-4 w-4" />
-                      <span className="text-xs font-normal">Preferences</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p className="max-w-xs text-xs">
-                      Customize AI response sources, conversation options, and citation preferences
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
+        {showDocumentUpload ? (
+          <Card className="max-w-xl w-full mx-auto my-10 p-6 animate-fade-in">
+            <DocumentUpload 
+              onUpload={handleFileUpload}
+            />
+          </Card>
+        ) : (
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel defaultSize={75} minSize={50}>
+              <div className="flex flex-col h-full">
+                <div className="flex justify-end mb-4 pr-4">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex items-center gap-1.5"
+                        onClick={() => navigate('/settings?tab=preferences')}
+                      >
+                        <Settings className="h-4 w-4" />
+                        <span className="text-xs font-normal">Preferences</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="max-w-xs text-xs">
+                        Customize AI response sources, conversation options, and citation preferences
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <div className="flex-1 overflow-y-auto subtle-scroll pb-10">
+                  <ChatOutput messages={messages} isLoading={isLoading} />
+                </div>
               </div>
-              <ChatOutput messages={messages} isLoading={isLoading} />
-            </>
-          )}
-        </div>
+            </ResizablePanel>
+            
+            {sources.length > 0 && !isMobile && (
+              <>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={25} minSize={20}>
+                  <SourcePanel sources={sources} />
+                </ResizablePanel>
+              </>
+            )}
+          </ResizablePanelGroup>
+        )}
         
-        <div className="pt-3 border-t border-border">
+        <div className="pt-3 border-t border-border mt-auto">
           {!showDocumentUpload ? (
             <div className="max-w-4xl mx-auto">
               <ChatInput 
