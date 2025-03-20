@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   Calendar,
   Download,
@@ -17,86 +20,129 @@ import {
   ExternalLink,
   File,
   FileImage,
-  FileSpreadsheet
+  FileSpreadsheet,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 
 interface Document {
   id: string;
   name: string;
-  type: 'pdf' | 'docx' | 'txt' | 'xlsx' | 'image';
+  type: string;
   size: number; // in bytes
   uploadDate: Date;
   url: string;
+  document_id?: string;
 }
 
 const Documents = () => {
-  const [documents, setDocuments] = useState<Document[]>([
-    {
-      id: '1',
-      name: 'Marketing Strategy Q3 2023.pdf',
-      type: 'pdf',
-      size: 2457600, // 2.4 MB
-      uploadDate: new Date('2023-09-15T14:23:00'),
-      url: '#'
-    },
-    {
-      id: '2',
-      name: 'Technical Documentation.docx',
-      type: 'docx',
-      size: 1548288, // 1.5 MB
-      uploadDate: new Date('2023-09-10T09:45:00'),
-      url: '#'
-    },
-    {
-      id: '3',
-      name: 'Research Notes.txt',
-      type: 'txt',
-      size: 45056, // 44 KB
-      uploadDate: new Date('2023-09-05T16:30:00'),
-      url: '#'
-    }
-  ]);
-  
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   
-  const handleFileUpload = (files: File[]) => {
-    const newDocuments: Document[] = files.map(file => {
-      const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
-      let type: Document['type'] = 'txt';
-      
-      if (['pdf'].includes(fileExt)) type = 'pdf';
-      else if (['doc', 'docx'].includes(fileExt)) type = 'docx';
-      else if (['xls', 'xlsx', 'csv'].includes(fileExt)) type = 'xlsx';
-      else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) type = 'image';
-      
-      return {
-        id: Math.random().toString(36).substring(2, 9),
-        name: file.name,
-        type,
-        size: file.size,
-        uploadDate: new Date(),
-        url: '#'
-      };
-    });
+  useEffect(() => {
+    fetchDocuments();
+  }, [user]);
+  
+  const fetchDocuments = async () => {
+    if (!user) {
+      setDocuments([]);
+      setIsLoading(false);
+      return;
+    }
     
-    setDocuments([...newDocuments, ...documents]);
+    setIsLoading(true);
     
-    toast({
-      title: "Documents Uploaded",
-      description: `Successfully uploaded ${files.length} document${files.length === 1 ? '' : 's'}.`,
-    });
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .order('upload_date', { ascending: false });
+        
+      if (error) {
+        throw error;
+      }
+      
+      const formattedDocs = data.map(doc => ({
+        id: doc.id,
+        name: doc.name,
+        type: doc.type,
+        size: doc.size,
+        uploadDate: new Date(doc.upload_date),
+        url: doc.url,
+        document_id: doc.document_id
+      }));
+      
+      setDocuments(formattedDocs);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      toast({
+        title: "Error loading documents",
+        description: "Failed to load your documents. Please try again later.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const handleDelete = (id: string) => {
-    const documentName = documents.find(d => d.id === id)?.name;
-    setDocuments(documents.filter(document => document.id !== id));
+  const handleFileUpload = (files: File[]) => {
+    // Refresh document list after upload
+    fetchDocuments();
+  };
+  
+  const handleDelete = async (id: string) => {
+    if (!user) return;
     
-    toast({
-      title: "Document Deleted",
-      description: `"${documentName}" has been deleted.`,
-    });
+    const documentToDelete = documents.find(d => d.id === id);
+    if (!documentToDelete || !documentToDelete.document_id) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      // First delete the file from storage
+      if (documentToDelete.document_id) {
+        const filePath = `${user.id}/${documentToDelete.document_id}`;
+        const { error: storageError } = await supabase
+          .storage
+          .from('documents')
+          .remove([filePath]);
+        
+        if (storageError) {
+          console.error('Error removing file from storage:', storageError);
+        }
+      }
+      
+      // Then delete the database entry
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', id);
+        
+      if (dbError) {
+        throw dbError;
+      }
+      
+      setDocuments(documents.filter(document => document.id !== id));
+      
+      toast({
+        title: "Document Deleted",
+        description: `"${documentToDelete.name}" has been deleted.`,
+      });
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast({
+        title: "Error deleting document",
+        description: "Failed to delete the document. Please try again later.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
   
   const formatSize = (bytes: number): string => {
@@ -117,18 +163,17 @@ const Documents = () => {
     });
   };
   
-  const getFileIcon = (type: Document['type']) => {
-    switch (type) {
-      case 'pdf':
-        return <File className="h-10 w-10 text-red-500" />;
-      case 'docx':
-        return <FileText className="h-10 w-10 text-blue-500" />;
-      case 'xlsx':
-        return <FileSpreadsheet className="h-10 w-10 text-green-500" />;
-      case 'image':
-        return <FileImage className="h-10 w-10 text-purple-500" />;
-      default:
-        return <FileText className="h-10 w-10 text-gray-500" />;
+  const getFileIcon = (type: string) => {
+    if (type.includes('pdf') || type.endsWith('.pdf')) {
+      return <File className="h-10 w-10 text-red-500" />;
+    } else if (type.includes('word') || type.includes('doc') || type.endsWith('.docx') || type.endsWith('.doc')) {
+      return <FileText className="h-10 w-10 text-blue-500" />;
+    } else if (type.includes('sheet') || type.includes('excel') || type.includes('csv') || type.endsWith('.xlsx') || type.endsWith('.xls') || type.endsWith('.csv')) {
+      return <FileSpreadsheet className="h-10 w-10 text-green-500" />;
+    } else if (type.includes('image') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => type.endsWith(`.${ext}`))) {
+      return <FileImage className="h-10 w-10 text-purple-500" />;
+    } else {
+      return <FileText className="h-10 w-10 text-gray-500" />;
     }
   };
   
@@ -137,9 +182,9 @@ const Documents = () => {
       document.name.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesType = activeTab === 'all' || 
-      (activeTab === 'pdf' && document.type === 'pdf') ||
-      (activeTab === 'docx' && document.type === 'docx') ||
-      (activeTab === 'other' && !['pdf', 'docx'].includes(document.type));
+      (activeTab === 'pdf' && (document.type.includes('pdf') || document.name.endsWith('.pdf'))) ||
+      (activeTab === 'docx' && (document.type.includes('doc') || document.name.endsWith('.docx') || document.name.endsWith('.doc'))) ||
+      (activeTab === 'other' && !document.type.includes('pdf') && !document.type.includes('doc') && !document.name.endsWith('.pdf') && !document.name.endsWith('.docx') && !document.name.endsWith('.doc'));
     
     return matchesSearch && matchesType;
   });
@@ -155,10 +200,12 @@ const Documents = () => {
             </p>
           </div>
           
-          <Button className="gap-1.5">
-            <Upload className="h-4 w-4" />
-            Upload
-          </Button>
+          <label htmlFor="file-upload">
+            <Button className="gap-1.5">
+              <Upload className="h-4 w-4" />
+              Upload
+            </Button>
+          </label>
         </div>
         
         <Card className="mb-8">
@@ -200,7 +247,12 @@ const Documents = () => {
             </div>
           </div>
           
-          {filteredDocuments.length > 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
+              <p className="text-muted-foreground">Loading your documents...</p>
+            </div>
+          ) : filteredDocuments.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredDocuments.map((document) => (
                 <Card 
@@ -245,17 +297,25 @@ const Documents = () => {
                       variant="outline"
                       size="sm"
                       className="h-8"
+                      asChild
                     >
-                      <Download className="h-3.5 w-3.5 mr-1.5" />
-                      Download
+                      <a href={document.url} download>
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        Download
+                      </a>
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50"
                       onClick={() => handleDelete(document.id)}
+                      disabled={isDeleting}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      {isDeleting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
                     </Button>
                   </CardFooter>
                 </Card>

@@ -156,6 +156,8 @@ export type Database = {
       }
       documents: {
         Row: {
+          content: string | null
+          document_id: string | null
           id: string
           name: string
           size: number
@@ -165,6 +167,8 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          content?: string | null
+          document_id?: string | null
           id?: string
           name: string
           size: number
@@ -174,6 +178,8 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          content?: string | null
+          document_id?: string | null
           id?: string
           name?: string
           size?: number

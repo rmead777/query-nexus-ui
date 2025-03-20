@@ -3,7 +3,11 @@ import { useState, useRef } from 'react';
 import { FileUp, X, File, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { v4 as uuidv4 } from '@/lib/uuid';
 
 interface FileUploadProps {
   onUpload: (files: File[]) => void;
@@ -25,6 +29,8 @@ export function DocumentUpload({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const { user } = useAuth();
   
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -41,7 +47,11 @@ export function DocumentUpload({
     return filesToValidate.filter(file => {
       // Check file size
       if (file.size > maxSize * 1024 * 1024) {
-        console.warn(`File ${file.name} exceeds maximum size of ${maxSize}MB`);
+        toast({
+          title: "File too large",
+          description: `${file.name} exceeds maximum size of ${maxSize}MB`,
+          variant: "destructive"
+        });
         return false;
       }
       
@@ -55,7 +65,11 @@ export function DocumentUpload({
                  type.trim() === '*' || 
                  type.trim() === '';
         })) {
-          console.warn(`File ${file.name} is not an accepted file type`);
+          toast({
+            title: "Invalid file type",
+            description: `${file.name} is not an accepted file type`,
+            variant: "destructive"
+          });
           return false;
         }
       }
@@ -88,38 +102,106 @@ export function DocumentUpload({
   
   const handleUpload = async () => {
     if (files.length === 0) return;
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to upload documents",
+        variant: "destructive"
+      });
+      return;
+    }
     
     setUploading(true);
     setProgress(0);
     
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 95) {
-          clearInterval(interval);
-          return prev;
-        }
-        return prev + 5;
-      });
-    }, 100);
+    const uploadedFiles: File[] = [];
+    let completedUploads = 0;
     
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      onUpload(files);
-      setProgress(100);
+      for (const file of files) {
+        // Generate a unique document ID
+        const documentId = uuidv4();
+        const filePath = `${user.id}/${documentId}`;
+        
+        // Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+        
+        if (uploadError) {
+          toast({
+            title: "Upload failed",
+            description: `Failed to upload ${file.name}: ${uploadError.message}`,
+            variant: "destructive"
+          });
+          continue;
+        }
+        
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(filePath);
+        
+        // Store document metadata in database
+        const { error: dbError } = await supabase
+          .from('documents')
+          .insert({
+            name: file.name,
+            type: file.type || file.name.split('.').pop() || 'unknown',
+            size: file.size,
+            url: urlData.publicUrl,
+            user_id: user.id,
+            document_id: documentId
+          });
+        
+        if (dbError) {
+          toast({
+            title: "Database error",
+            description: `Failed to save document metadata: ${dbError.message}`,
+            variant: "destructive"
+          });
+          continue;
+        }
+        
+        // Process document with edge function (for text extraction, etc.)
+        if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+          try {
+            await supabase.functions.invoke('process-document', {
+              body: { documentId }
+            });
+          } catch (processError) {
+            console.error('Error processing document:', processError);
+            // Continue even if processing fails
+          }
+        }
+        
+        uploadedFiles.push(file);
+        completedUploads++;
+        setProgress(Math.round((completedUploads / files.length) * 100));
+      }
       
-      // Reset after successful upload
-      setTimeout(() => {
+      if (uploadedFiles.length > 0) {
+        onUpload(uploadedFiles);
         setFiles([]);
-        setUploading(false);
-        setProgress(0);
-      }, 500);
+        toast({
+          title: "Upload complete",
+          description: `Successfully uploaded ${uploadedFiles.length} document${uploadedFiles.length === 1 ? '' : 's'}.`,
+        });
+      }
       
     } catch (error) {
       console.error("Upload failed:", error);
+      toast({
+        title: "Upload failed",
+        description: "An unexpected error occurred during upload.",
+        variant: "destructive"
+      });
     } finally {
-      clearInterval(interval);
+      setUploading(false);
+      setProgress(0);
     }
   };
   
@@ -174,7 +256,6 @@ export function DocumentUpload({
         </div>
       </div>
       
-      {/* File List */}
       {files.length > 0 && (
         <div className="mt-4 space-y-3 animate-fade-in">
           {files.map((file, index) => (
