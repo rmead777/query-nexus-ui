@@ -5,7 +5,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatOutput } from '@/components/chat/ChatOutput';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { v4 } from 'uuid';
+import { v4 } from '@/lib/uuid';
 import { useConversationStore } from '@/hooks/use-conversation-store';
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from 'react-router-dom';
