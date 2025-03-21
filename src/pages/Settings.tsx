@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,7 +11,6 @@ import { useSettings, ResponseSourceSettings } from '@/hooks/use-settings';
 import { useLocation } from 'react-router-dom';
 import { ApiEndpoint } from '@/types/api';
 
-// Define types for each tab's settings
 interface ApiSettingsState {
   apiKey: string;
   apiEndpoint: string;
@@ -54,7 +52,6 @@ const Settings = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState("api");
 
-  // Get tab from URL if available
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const tab = searchParams.get('tab');
@@ -63,7 +60,6 @@ const Settings = () => {
     }
   }, [location]);
 
-  // Set up state for each tab's settings
   const [apiSettings, setApiSettings] = useState<ApiSettingsState>({
     apiKey: '',
     apiEndpoint: '',
@@ -104,7 +100,6 @@ const Settings = () => {
     useExternalSearch: false
   });
 
-  // For the endpoints tab
   const [apiEndpoints, setApiEndpoints] = useState<ApiEndpoint[]>([]);
   const [selectedEndpointId, setSelectedEndpointId] = useState<string | null>(null);
   const [isAddingEndpoint, setIsAddingEndpoint] = useState(false);
@@ -126,7 +121,6 @@ const Settings = () => {
   };
 
   const handleEndpointSelect = (endpointId: string) => {
-    // This would be implemented to select an endpoint
     console.log("Selected endpoint:", endpointId);
     setSelectedEndpointId(endpointId);
   };
@@ -136,28 +130,23 @@ const Settings = () => {
   };
   
   const handleAddEndpoint = async () => {
-    // Implementation for adding an endpoint
     console.log("Adding endpoint:", newEndpoint);
   };
   
   const handleEditEndpoint = (endpoint: ApiEndpoint) => {
-    // Implementation for editing an endpoint
     console.log("Editing endpoint:", endpoint);
     setIsEditingEndpoint(true);
     setNewEndpoint(endpoint);
   };
   
   const handleDeleteEndpoint = async (id: string) => {
-    // Implementation for deleting an endpoint
     console.log("Deleting endpoint:", id);
   };
   
   const handleSetActiveEndpoint = async (id: string) => {
-    // Implementation for setting an active endpoint
     console.log("Setting active endpoint:", id);
   };
 
-  // Load settings when available
   useEffect(() => {
     if (settings) {
       setApiSettings({
@@ -276,10 +265,12 @@ const Settings = () => {
               }}
               useAzure={azureSettings.useAzure}
               setUseAzure={(value) => {
-                setAzureSettings(prev => ({
-                  ...prev,
-                  useAzure: value
-                }));
+                setAzureSettings(prev => {
+                  return {
+                    ...prev,
+                    useAzure: value
+                  };
+                });
               }}
               initialValues={{
                 useAzure: azureSettings.useAzure,
