@@ -36,6 +36,7 @@ interface AzureSettingsState {
   searchEndpoint: string;
   searchKey: string;
   searchIndexName: string;
+  apiKey: string; // Added to match AzureSettings interface
 }
 
 interface AdvancedSettingsState {
@@ -85,7 +86,8 @@ const Settings = () => {
     deploymentName: '',
     searchEndpoint: '',
     searchKey: '',
-    searchIndexName: ''
+    searchIndexName: '',
+    apiKey: '' // Added to match AzureSettings interface
   });
 
   const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettingsState>({
@@ -106,6 +108,11 @@ const Settings = () => {
   const [apiEndpoints, setApiEndpoints] = useState<ApiEndpoint[]>([]);
   const [selectedEndpointId, setSelectedEndpointId] = useState<string | null>(null);
   const [isAddingEndpoint, setIsAddingEndpoint] = useState(false);
+  const [isEditingEndpoint, setIsEditingEndpoint] = useState(false);
+  const [showNewApiKey, setShowNewApiKey] = useState(false);
+  const [showAzureKey, setShowAzureKey] = useState(false);
+  const [showSearchKey, setShowSearchKey] = useState(false);
+  
   const [newEndpoint, setNewEndpoint] = useState<Partial<ApiEndpoint>>({
     name: '',
     provider: 'OpenAI',
@@ -121,10 +128,33 @@ const Settings = () => {
   const handleEndpointSelect = (endpointId: string) => {
     // This would be implemented to select an endpoint
     console.log("Selected endpoint:", endpointId);
+    setSelectedEndpointId(endpointId);
   };
 
   const handleModelSelect = (model: string) => {
     setApiSettings(prev => ({ ...prev, model }));
+  };
+  
+  const handleAddEndpoint = async () => {
+    // Implementation for adding an endpoint
+    console.log("Adding endpoint:", newEndpoint);
+  };
+  
+  const handleEditEndpoint = (endpoint: ApiEndpoint) => {
+    // Implementation for editing an endpoint
+    console.log("Editing endpoint:", endpoint);
+    setIsEditingEndpoint(true);
+    setNewEndpoint(endpoint);
+  };
+  
+  const handleDeleteEndpoint = async (id: string) => {
+    // Implementation for deleting an endpoint
+    console.log("Deleting endpoint:", id);
+  };
+  
+  const handleSetActiveEndpoint = async (id: string) => {
+    // Implementation for setting an active endpoint
+    console.log("Setting active endpoint:", id);
   };
 
   // Load settings when available
@@ -152,7 +182,8 @@ const Settings = () => {
         deploymentName: settings.azure_deployment_name || '',
         searchEndpoint: settings.azure_search_endpoint || '',
         searchKey: settings.azure_search_key || '',
-        searchIndexName: settings.azure_search_index_name || ''
+        searchIndexName: settings.azure_search_index_name || '',
+        apiKey: settings.azure_api_key || '' // Added to match interface
       });
 
       setAdvancedSettings({
@@ -232,7 +263,7 @@ const Settings = () => {
               azureSettings={azureSettings}
               setAzureSettings={setAzureSettings}
               useAzure={azureSettings.useAzure}
-              setUseAzure={(useAzure) => setAzureSettings(prev => ({...prev, useAzure}))}
+              setUseAzure={(useAzureValue) => setAzureSettings(prev => ({...prev, useAzure: useAzureValue}))}
               initialValues={{
                 useAzure: azureSettings.useAzure,
                 azureApiKey: azureSettings.azureApiKey,
@@ -252,18 +283,29 @@ const Settings = () => {
                 azure_search_index_name: values.azureSearchIndexName
               })}
               saving={saving}
+              showAzureKey={showAzureKey}
+              setShowAzureKey={setShowAzureKey}
+              showSearchKey={showSearchKey}
+              setShowSearchKey={setShowSearchKey}
             />
           </TabsContent>
           
           <TabsContent value="endpoints">
             <EndpointsTab 
-              initialValues={{
-                apiEndpoint: apiSettings.apiEndpoint || ''
-              }}
-              onSave={(values) => handleSaveSettings({
-                api_endpoint: values.apiEndpoint
-              })}
+              apiEndpoints={apiEndpoints}
+              newEndpoint={newEndpoint}
+              setNewEndpoint={setNewEndpoint}
+              isAddingEndpoint={isAddingEndpoint}
+              setIsAddingEndpoint={setIsAddingEndpoint}
+              isEditingEndpoint={isEditingEndpoint}
+              setIsEditingEndpoint={setIsEditingEndpoint}
+              handleAddEndpoint={handleAddEndpoint}
+              handleEditEndpoint={handleEditEndpoint}
+              handleDeleteEndpoint={handleDeleteEndpoint}
+              handleSetActiveEndpoint={handleSetActiveEndpoint}
               saving={saving}
+              showNewApiKey={showNewApiKey}
+              setShowNewApiKey={setShowNewApiKey}
             />
           </TabsContent>
           

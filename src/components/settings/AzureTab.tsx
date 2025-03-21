@@ -22,7 +22,16 @@ interface AzureTabProps {
   setAzureSettings: React.Dispatch<React.SetStateAction<AzureSettings>>;
   useAzure: boolean;
   setUseAzure: React.Dispatch<React.SetStateAction<boolean>>;
-  handleSaveSettings: (settingType: 'preferences' | 'api' | 'azure' | 'advanced') => Promise<void>;
+  initialValues: {
+    useAzure: boolean;
+    azureApiKey: string;
+    azureEndpointUrl: string;
+    azureDeploymentName: string;
+    azureSearchEndpoint: string;
+    azureSearchKey: string;
+    azureSearchIndexName: string;
+  };
+  onSave: (values: any) => Promise<void>;
   saving: boolean;
   showAzureKey: boolean;
   setShowAzureKey: React.Dispatch<React.SetStateAction<boolean>>;
@@ -35,7 +44,8 @@ export const AzureTab = ({
   setAzureSettings,
   useAzure,
   setUseAzure,
-  handleSaveSettings,
+  initialValues,
+  onSave,
   saving,
   showAzureKey,
   setShowAzureKey,
