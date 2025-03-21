@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
@@ -35,6 +36,7 @@ interface Document {
   is_readable?: boolean;
   needs_processing?: boolean;
   extraction_method?: string;
+  content?: string;
 }
 
 const Documents = () => {
