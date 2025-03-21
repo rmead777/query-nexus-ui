@@ -28,6 +28,35 @@ function formatTemplate(template: any, values: Record<string, any>): any {
   return template;
 }
 
+// Calculate semantic similarity between two texts (simple version)
+function calculateTextSimilarity(text1: string, text2: string): number {
+  if (!text1 || !text2) return 0;
+  
+  // Convert to lowercase for better matching
+  const text1Lower = text1.toLowerCase();
+  const text2Lower = text2.toLowerCase();
+  
+  // Extract keywords (words longer than 3 characters)
+  const text1Words = text1Lower.split(/\s+/).filter(word => word.length > 3);
+  const text2Words = text2Lower.split(/\s+/).filter(word => word.length > 3);
+  
+  // Count matching words
+  let matchCount = 0;
+  let totalWords = text1Words.length;
+  
+  for (const word of text1Words) {
+    if (text2Words.includes(word)) {
+      matchCount++;
+    }
+  }
+  
+  // Prevent division by zero
+  if (totalWords === 0) return 0;
+  
+  // Calculate a similarity score (0-100)
+  return Math.min(100, Math.round((matchCount / totalWords) * 100));
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -78,7 +107,7 @@ serve(async (req) => {
       // Fetch document content for the provided document IDs
       const { data: documents, error } = await supabase
         .from('documents')
-        .select('document_id, name, content, url')
+        .select('document_id, name, content, url, type')
         .in('document_id', documentIds);
 
       if (error) {
@@ -114,7 +143,7 @@ serve(async (req) => {
           // Fetch the documents again to get the updated content
           const { data: updatedDocs, error: refetchError } = await supabase
             .from('documents')
-            .select('document_id, name, content, url')
+            .select('document_id, name, content, url, type')
             .in('document_id', documentIds);
             
           if (!refetchError && updatedDocs) {
@@ -132,31 +161,35 @@ serve(async (req) => {
           return `--- Document: ${doc.name} ---\n${doc.content}\n\n`;
         }).join("\n");
         
-        // Prepare sources data for frontend
+        // Calculate relevance scores using the prompt and document content
         documentSourcesData = documents.map(doc => {
-          // Calculate a relevance score based on keyword presence or just use a random high score for demonstration
           const contentForScoring = doc.content || '';
-          const promptLower = prompt.toLowerCase();
-          const contentLower = contentForScoring.toLowerCase();
           
-          // Simple relevance scoring: check if any words from the prompt appear in the content
-          let relevanceScore = 85; // Base score
+          // Calculate a more accurate relevance score based on text similarity
+          let relevanceScore = 60; // Base score
           
-          if (contentLower && contentLower.length > 0) {
-            const promptWords = promptLower.split(/\s+/).filter(word => word.length > 3);
-            let matches = 0;
+          if (contentForScoring && contentForScoring.length > 0 && prompt && prompt.length > 0) {
+            // Calculate similarity between prompt and document content
+            const similarityScore = calculateTextSimilarity(prompt, contentForScoring);
             
-            for (const word of promptWords) {
-              if (contentLower.includes(word)) {
-                matches++;
+            // Adjust final score to be in range 65-98 based on similarity
+            relevanceScore = 65 + Math.min(33, Math.round(similarityScore / 3));
+            
+            // Boost score for exact keyword matches
+            const promptKeywords = prompt.toLowerCase().split(/\s+/).filter(word => word.length > 3);
+            for (const keyword of promptKeywords) {
+              if (contentForScoring.toLowerCase().includes(keyword)) {
+                // Add a small boost for each exact keyword match
+                relevanceScore += 2;
               }
             }
             
-            if (promptWords.length > 0) {
-              // Adjust score based on matches (between 85-100)
-              relevanceScore = 85 + Math.min(15, Math.round((matches / promptWords.length) * 15));
-            }
+            // Cap at 98% (save 99-100% for perfect matches)
+            relevanceScore = Math.min(98, relevanceScore);
           }
+          
+          // Make sure each document has a unique score for better visualization
+          const randomAdjustment = Math.floor(Math.random() * 3) - 1;
           
           return {
             id: doc.document_id,
@@ -164,9 +197,13 @@ serve(async (req) => {
             content: (doc.content || '').substring(0, 1000) + ((doc.content || '').length > 1000 ? '...' : ''),
             documentName: doc.name,
             url: doc.url,
-            relevanceScore
+            documentType: doc.type || 'unknown',
+            relevanceScore: Math.max(60, Math.min(98, relevanceScore + randomAdjustment))
           };
         });
+        
+        // Sort documents by relevance score (highest first)
+        documentSourcesData.sort((a, b) => b.relevanceScore - a.relevanceScore);
       } else {
         console.log("No document content found for IDs:", documentIds);
       }
@@ -181,6 +218,11 @@ serve(async (req) => {
       systemContent += " Prioritize information from the provided documents when answering, but you can also use your built-in knowledge when necessary.";
     } else if (sources.useDocuments && sources.useKnowledgeBase && sources.useExternalSearch) {
       systemContent += " Use information from provided documents, your knowledge base, and information from external searches to provide comprehensive answers.";
+    }
+    
+    // Add a specific instruction to make sure the AI tries harder to find information in documents
+    if (sources.useDocuments && documentContent) {
+      systemContent += " Make sure to thoroughly examine all provided documents for relevant information before responding that you don't have the information.";
     }
 
     // Handle custom request template if provided

@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -6,6 +5,77 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Helper function to extract meaningful content from HTML
+function extractTextFromHTML(html: string): string {
+  // Remove script and style tags and their content
+  let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ');
+  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
+  
+  // Remove HTML tags
+  text = text.replace(/<\/?[^>]+(>|$)/g, ' ');
+  
+  // Replace multiple spaces with a single space
+  text = text.replace(/\s+/g, ' ');
+  
+  // Decode HTML entities
+  text = text.replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  
+  return text.trim();
+}
+
+// Simple parser for extracting text from PDFs
+function extractTextFromPDF(buffer: ArrayBuffer): string {
+  // This is a simplified approach - in a real application, you would use a dedicated PDF parsing library
+  // Convert buffer to string and look for text content
+  const text = new TextDecoder().decode(buffer);
+  
+  // Look for text blocks in the PDF string representation
+  // This is not a complete solution but can extract some plain text
+  let extractedText = '';
+  
+  // Find text blocks between BT and ET markers
+  const textMatches = text.match(/BT([\s\S]*?)ET/g);
+  if (textMatches) {
+    for (const match of textMatches) {
+      // Extract text strings (usually between parentheses or angle brackets)
+      const stringMatches = match.match(/\((.*?)\)|\<(.*?)\>/g);
+      if (stringMatches) {
+        for (const stringMatch of stringMatches) {
+          // Clean up the extracted text
+          let cleanText = stringMatch.replace(/^\(|\)$|^\<|\>$/g, '');
+          // Convert hex encoded text
+          if (stringMatch.startsWith('<') && stringMatch.endsWith('>')) {
+            try {
+              // Convert hex pairs to characters
+              const hexPairs = cleanText.match(/.{1,2}/g) || [];
+              cleanText = hexPairs.map(hex => String.fromCharCode(parseInt(hex, 16))).join('');
+            } catch (e) {
+              // If conversion fails, keep the original
+            }
+          }
+          extractedText += cleanText + ' ';
+        }
+      }
+    }
+  }
+  
+  // If we couldn't extract text with the above method, try a simpler approach
+  if (extractedText.trim().length < 100) {
+    // Look for any text that might be between parentheses
+    const simpleMatches = text.match(/\((.*?)\)/g);
+    if (simpleMatches) {
+      extractedText = simpleMatches.map(m => m.slice(1, -1)).join(' ');
+    }
+  }
+  
+  return extractedText.trim();
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -69,14 +139,47 @@ serve(async (req) => {
         const response = await fetch(document.url);
         
         if (response.ok) {
-          if (document.type === 'text/plain' || 
+          const contentType = document.type || response.headers.get('content-type') || '';
+          
+          if (contentType.includes('text/plain') || 
               document.name.endsWith('.txt') || 
               document.name.endsWith('.md')) {
+            // Plain text files
             content = await response.text();
             console.log(`Successfully extracted ${content.length} characters of text`);
+          } else if (contentType.includes('text/html') || document.name.endsWith('.html') || document.name.endsWith('.htm')) {
+            // HTML files
+            const html = await response.text();
+            content = extractTextFromHTML(html);
+            console.log(`Successfully extracted ${content.length} characters from HTML`);
+          } else if (contentType.includes('application/pdf') || document.name.toLowerCase().endsWith('.pdf')) {
+            // PDF files
+            const buffer = await response.arrayBuffer();
+            content = extractTextFromPDF(buffer);
+            console.log(`Successfully extracted ${content.length} characters from PDF`);
+            
+            // If the PDF extraction returned very little text, it's likely a scanned document
+            if (content.length < 200) {
+              console.log("PDF appears to be image-based or has limited extractable text");
+              content += "\n\nNote: This document appears to be image-based or has limited extractable text.";
+            }
+          } else if (contentType.includes('application/json') || document.name.endsWith('.json')) {
+            // JSON files
+            const json = await response.json();
+            content = JSON.stringify(json, null, 2);
+            console.log(`Successfully extracted ${content.length} characters from JSON`);
+          } else if (document.name.endsWith('.csv')) {
+            // CSV files
+            const text = await response.text();
+            content = text;
+            console.log(`Successfully extracted ${content.length} characters from CSV`);
+          } else if (document.name.endsWith('.docx') || contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+            // Word documents - limited extraction
+            content = "This document is a Word document (.docx) which requires specialized parsing.";
+            console.log("Word document detected, extraction limited");
           } else {
-            console.log(`Unsupported document type for direct extraction: ${document.type}`);
-            // For other types, we'd need more complex processing
+            console.log(`Unsupported document type for direct extraction: ${contentType}`);
+            content = `Document type (${contentType}) not supported for direct content extraction.`;
           }
         } else {
           console.error(`Failed to fetch from URL: ${response.status} ${response.statusText}`);
@@ -87,7 +190,7 @@ serve(async (req) => {
     }
 
     // If still no content and we have user_id, try to get from storage
-    if (!content && document.user_id) {
+    if ((!content || content.length < 50) && document.user_id) {
       try {
         const userId = document.user_id;
         const filePath = `${userId}/${documentId}`;
@@ -102,15 +205,32 @@ serve(async (req) => {
         if (fileError) {
           console.error('Error downloading file from storage:', fileError);
         } else if (fileData) {
-          // For text files, extract content
-          if (document.type === 'text/plain' || 
+          const contentType = document.type || '';
+          
+          if (contentType.includes('text/plain') || 
               document.name.endsWith('.txt') || 
               document.name.endsWith('.md')) {
+            // Text files
             content = await fileData.text();
             console.log(`Successfully extracted ${content.length} characters of text from storage`);
+          } else if (contentType.includes('text/html') || document.name.endsWith('.html') || document.name.endsWith('.htm')) {
+            // HTML files
+            const html = await fileData.text();
+            content = extractTextFromHTML(html);
+            console.log(`Successfully extracted ${content.length} characters from HTML in storage`);
+          } else if (contentType.includes('application/pdf') || document.name.toLowerCase().endsWith('.pdf')) {
+            // PDF files
+            const buffer = await fileData.arrayBuffer();
+            content = extractTextFromPDF(buffer);
+            console.log(`Successfully extracted ${content.length} characters from PDF in storage`);
+            
+            if (content.length < 200) {
+              console.log("PDF appears to be image-based or has limited extractable text");
+              content += "\n\nNote: This document appears to be image-based or has limited extractable text.";
+            }
           } else {
-            console.log(`Unsupported document type for direct extraction: ${document.type}`);
-            // For other types, we'd need more complex processing
+            console.log(`Unsupported document type for storage extraction: ${contentType}`);
+            content = `Document type (${contentType}) not supported for storage content extraction.`;
           }
         }
       } catch (storageError) {

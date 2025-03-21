@@ -25,7 +25,8 @@ import {
   Plus,
   Trash2,
   Edit,
-  Check
+  Check,
+  HelpCircle
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,6 +39,7 @@ import { RequestTemplateEditor } from '@/components/settings/RequestTemplateEdit
 import { defaultRequestTemplates, RequestTemplate } from '@/types/api';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ResponseSourceSettings {
   useDocuments: boolean;
@@ -588,806 +590,340 @@ const Settings = () => {
           </div>
         </div>
         
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            <TabsTrigger value="api">API Settings</TabsTrigger>
-            <TabsTrigger value="endpoints">API Keys & Endpoints</TabsTrigger>
-            <TabsTrigger value="advanced">Advanced</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="preferences" className="animate-fade-in space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <SettingsIcon className="h-5 w-5" />
-                  Application Preferences
-                </CardTitle>
-                <CardDescription>
-                  Customize your application experience.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="text-base">Auto-save conversations</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Automatically save your conversations for future reference
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="text-base">Show sources by default</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Always show the sources panel when available
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="text-base">Citations in responses</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Include citation references in AI responses
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  onClick={() => handleSaveSettings('preferences')}
-                  className="ml-auto"
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Preferences
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
+        <TooltipProvider>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
+            <TabsList className="grid w-full grid-cols-4 mb-6">
+              <TabsTrigger value="preferences">Preferences</TabsTrigger>
+              <TabsTrigger value="api">API Settings</TabsTrigger>
+              <TabsTrigger value="endpoints">API Keys & Endpoints</TabsTrigger>
+              <TabsTrigger value="advanced">Advanced</TabsTrigger>
+            </TabsList>
             
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Search className="h-5 w-5" />
-                  AI Response Sources
-                </CardTitle>
-                <CardDescription>
-                  Control where the AI should source information for responses
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <Checkbox 
-                      id="use-documents" 
-                      checked={responseSources.useDocuments}
-                      onCheckedChange={(checked) => 
-                        setResponseSources({...responseSources, useDocuments: checked === true})}
-                    />
-                    <div className="space-y-1">
-                      <Label 
-                        htmlFor="use-documents" 
-                        className="text-base font-medium flex items-center gap-1.5"
-                      >
-                        <BookOpen className="h-4 w-4" />
-                        Uploaded Documents
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        Limit responses to information found in the uploaded or saved documents only
-                      </p>
+            <TabsContent value="preferences" className="animate-fade-in space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <SettingsIcon className="h-5 w-5" />
+                    Application Preferences
+                  </CardTitle>
+                  <CardDescription>
+                    Customize your application experience.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Auto-save conversations</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically save your conversations for future reference
+                        </p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Show sources by default</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Always show the sources panel when available
+                        </p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Citations in responses</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Include citation references in AI responses
+                        </p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button 
+                    onClick={() => handleSaveSettings('preferences')}
+                    className="ml-auto"
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Preferences
+                      </>
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Search className="h-5 w-5" />
+                    AI Response Sources
+                  </CardTitle>
+                  <CardDescription>
+                    Control where the AI should source information for responses
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-start space-x-3">
+                      <Checkbox 
+                        id="use-documents" 
+                        checked={responseSources.useDocuments}
+                        onCheckedChange={(checked) => 
+                          setResponseSources({...responseSources, useDocuments: checked === true})}
+                      />
+                      <div className="space-y-1">
+                        <Label 
+                          htmlFor="use-documents" 
+                          className="text-base font-medium flex items-center gap-1.5"
+                        >
+                          <BookOpen className="h-4 w-4" />
+                          Uploaded Documents
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Limit responses to information found in the uploaded or saved documents only
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start space-x-3">
+                      <Checkbox 
+                        id="use-knowledge-base" 
+                        checked={responseSources.useKnowledgeBase}
+                        onCheckedChange={(checked) => 
+                          setResponseSources({...responseSources, useKnowledgeBase: checked === true})}
+                      />
+                      <div className="space-y-1">
+                        <Label 
+                          htmlFor="use-knowledge-base" 
+                          className="text-base font-medium flex items-center gap-1.5"
+                        >
+                          <Brain className="h-4 w-4" />
+                          AI Knowledge Base
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Allow the AI to use its pre-trained knowledge to answer questions
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start space-x-3">
+                      <Checkbox 
+                        id="use-external-search" 
+                        checked={responseSources.useExternalSearch}
+                        onCheckedChange={(checked) => 
+                          setResponseSources({...responseSources, useExternalSearch: checked === true})}
+                      />
+                      <div className="space-y-1">
+                        <Label 
+                          htmlFor="use-external-search" 
+                          className="text-base font-medium flex items-center gap-1.5"
+                        >
+                          <Search className="h-4 w-4" />
+                          External Search
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Allow the AI to search for additional information from external sources
+                        </p>
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="flex items-start space-x-3">
-                    <Checkbox 
-                      id="use-knowledge-base" 
-                      checked={responseSources.useKnowledgeBase}
-                      onCheckedChange={(checked) => 
-                        setResponseSources({...responseSources, useKnowledgeBase: checked === true})}
-                    />
-                    <div className="space-y-1">
-                      <Label 
-                        htmlFor="use-knowledge-base" 
-                        className="text-base font-medium flex items-center gap-1.5"
-                      >
-                        <Brain className="h-4 w-4" />
-                        AI Knowledge Base
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        Allow the AI to use its pre-trained knowledge to answer questions
-                      </p>
-                    </div>
+                  <div className="flex items-center gap-2 text-sm p-3 rounded-md bg-blue-50 text-blue-600">
+                    <Info className="h-4 w-4" />
+                    <span>
+                      Using multiple sources provides more comprehensive responses, but may increase response time.
+                      For the most accurate document-specific answers, enable "Uploaded Documents" only.
+                    </span>
                   </div>
-                  
-                  <div className="flex items-start space-x-3">
-                    <Checkbox 
-                      id="use-external-search" 
-                      checked={responseSources.useExternalSearch}
-                      onCheckedChange={(checked) => 
-                        setResponseSources({...responseSources, useExternalSearch: checked === true})}
-                    />
-                    <div className="space-y-1">
-                      <Label 
-                        htmlFor="use-external-search" 
-                        className="text-base font-medium flex items-center gap-1.5"
-                      >
-                        <Search className="h-4 w-4" />
-                        External Search
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        Allow the AI to search for additional information from external sources
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 text-sm p-3 rounded-md bg-blue-50 text-blue-600">
-                  <Info className="h-4 w-4" />
-                  <span>
-                    Using multiple sources provides more comprehensive responses, but may increase response time.
-                    For the most accurate document-specific answers, enable "Uploaded Documents" only.
-                  </span>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  onClick={() => handleSaveSettings('preferences')}
-                  className="ml-auto"
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Source Settings
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="api" className="space-y-6 animate-fade-in">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      Active API Settings
-                    </CardTitle>
-                    <CardDescription>
-                      Configure your active language model API settings.
-                    </CardDescription>
-                  </div>
-                  {apiEndpoints.length > 0 && (
+                </CardContent>
+                <CardFooter>
+                  <Button 
+                    onClick={() => handleSaveSettings('preferences')}
+                    className="ml-auto"
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Source Settings
+                      </>
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="api" className="space-y-6 animate-fade-in">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-start">
                     <div>
-                      <Select 
-                        value={selectedEndpointId || undefined} 
-                        onValueChange={(value) => {
-                          setSelectedEndpointId(value);
-                          handleEndpointSelect(value);
-                        }}
+                      <CardTitle className="flex items-center gap-2">
+                        Active API Settings
+                      </CardTitle>
+                      <CardDescription>
+                        Configure your active language model API settings.
+                      </CardDescription>
+                    </div>
+                    {apiEndpoints.length > 0 && (
+                      <div>
+                        <Select 
+                          value={selectedEndpointId || undefined} 
+                          onValueChange={(value) => {
+                            setSelectedEndpointId(value);
+                            handleEndpointSelect(value);
+                          }}
+                        >
+                          <SelectTrigger className="w-[220px]">
+                            <SelectValue placeholder="Select API endpoint" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {apiEndpoints.map(endpoint => (
+                              <SelectItem key={endpoint.id} value={endpoint.id}>
+                                {endpoint.name} {endpoint.is_active && <Check className="inline-block h-4 w-4 ml-1" />}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="provider-select">Provider</Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Select the company that provides the AI model (e.g., OpenAI, Anthropic). This determines the API endpoint format and available models.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Select
+                        value={newEndpoint.provider}
+                        onValueChange={handleProviderSelect}
                       >
-                        <SelectTrigger className="w-[220px]">
-                          <SelectValue placeholder="Select API endpoint" />
+                        <SelectTrigger id="provider-select">
+                          <SelectValue placeholder="Select a provider" />
                         </SelectTrigger>
                         <SelectContent>
-                          {apiEndpoints.map(endpoint => (
-                            <SelectItem key={endpoint.id} value={endpoint.id}>
-                              {endpoint.name} {endpoint.is_active && <Check className="inline-block h-4 w-4 ml-1" />}
+                          <SelectItem value="OpenAI">OpenAI</SelectItem>
+                          <SelectItem value="Anthropic">Anthropic</SelectItem>
+                          <SelectItem value="Google">Google (Gemini)</SelectItem>
+                          <SelectItem value="Cohere">Cohere</SelectItem>
+                          <SelectItem value="Custom">Custom Provider</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="model-select">Model</Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>The specific AI model to use. Different models have varying capabilities, token limits, and pricing. More advanced models (like GPT-4o) generally provide better responses but cost more.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Select
+                        value={selectedModel || undefined}
+                        onValueChange={handleModelSelect}
+                      >
+                        <SelectTrigger id="model-select">
+                          <SelectValue placeholder="Select a model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {modelOptions.map(model => (
+                            <SelectItem key={model.value} value={model.value}>
+                              {model.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="provider-select">Provider</Label>
-                    <Select
-                      value={newEndpoint.provider}
-                      onValueChange={handleProviderSelect}
-                    >
-                      <SelectTrigger id="provider-select">
-                        <SelectValue placeholder="Select a provider" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="OpenAI">OpenAI</SelectItem>
-                        <SelectItem value="Anthropic">Anthropic</SelectItem>
-                        <SelectItem value="Google">Google (Gemini)</SelectItem>
-                        <SelectItem value="Cohere">Cohere</SelectItem>
-                        <SelectItem value="Custom">Custom Provider</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="model-select">Model</Label>
-                    <Select
-                      value={selectedModel || undefined}
-                      onValueChange={handleModelSelect}
-                    >
-                      <SelectTrigger id="model-select">
-                        <SelectValue placeholder="Select a model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {modelOptions.map(model => (
-                          <SelectItem key={model.value} value={model.value}>
-                            {model.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="api-endpoint">API Endpoint</Label>
-                    <Input
-                      id="api-endpoint"
-                      value={apiSettings.endpoint}
-                      onChange={(e) => setApiSettings({...apiSettings, endpoint: e.target.value})}
-                      placeholder="https://api.openai.com/v1"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="api-key">API Key</Label>
-                    <div className="relative">
-                      <Input
-                        id="api-key"
-                        type={showApiKey ? "text" : "password"}
-                        value={apiSettings.apiKey}
-                        onChange={(e) => setApiSettings({...apiSettings, apiKey: e.target.value})}
-                        placeholder="Your API key"
-                        className="pr-10"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-10 w-10"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                      >
-                        {showApiKey ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">
-                          {showApiKey ? "Hide API key" : "Show API key"}
-                        </span>
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="temperature">Temperature</Label>
-                    <Input
-                      id="temperature"
-                      type="number"
-                      min="0"
-                      max="2"
-                      step="0.1"
-                      value={apiSettings.temperature}
-                      onChange={(e) => setApiSettings({...apiSettings, temperature: parseFloat(e.target.value)})}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="max-tokens">Max Tokens</Label>
-                    <Input
-                      id="max-tokens"
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={apiSettings.maxTokens}
-                      onChange={(e) => setApiSettings({...apiSettings, maxTokens: parseInt(e.target.value)})}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Info className="h-4 w-4" />
-                  <span>Required for the application to function</span>
-                </div>
-                <Button 
-                  onClick={() => handleSaveSettings('api')}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Settings
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      Azure OpenAI API Integration
-                    </CardTitle>
-                    <CardDescription>
-                      Optional integration with Azure OpenAI API and Cognitive Search.
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="use-azure" className="text-sm font-normal">Enable Azure</Label>
-                    <Switch defaultChecked={useAzure} onCheckedChange={setUseAzure} />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="azure-endpoint">Azure Endpoint</Label>
-                    <Input
-                      id="azure-endpoint"
-                      value={azureSettings.endpointUrl}
-                      onChange={(e) => setAzureSettings({...azureSettings, endpointUrl: e.target.value})}
-                      placeholder="https://your-azure-endpoint.com"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="azure-deployment">Azure Deployment</Label>
-                    <Input
-                      id="azure-deployment"
-                      value={azureSettings.deploymentName}
-                      onChange={(e) => setAzureSettings({...azureSettings, deploymentName: e.target.value})}
-                      placeholder="your-deployment-name"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="azure-search-endpoint">Azure Search Endpoint</Label>
-                    <Input
-                      id="azure-search-endpoint"
-                      value={azureSettings.searchEndpoint}
-                      onChange={(e) => setAzureSettings({...azureSettings, searchEndpoint: e.target.value})}
-                      placeholder="https://your-azure-search-endpoint.com"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="azure-search-key">Azure Search Key</Label>
-                    <div className="relative">
-                      <Input
-                        id="azure-search-key"
-                        type={showAzureKey ? "text" : "password"}
-                        value={azureSettings.searchKey}
-                        onChange={(e) => setAzureSettings({...azureSettings, searchKey: e.target.value})}
-                        placeholder="Your Azure Search Key"
-                        className="pr-10"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-10 w-10"
-                        onClick={() => setShowAzureKey(!showAzureKey)}
-                      >
-                        {showAzureKey ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">
-                          {showAzureKey ? "Hide Azure Search Key" : "Show Azure Search Key"}
-                        </span>
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="azure-search-index">Azure Search Index</Label>
-                    <Input
-                      id="azure-search-index"
-                      value={azureSettings.searchIndexName}
-                      onChange={(e) => setAzureSettings({...azureSettings, searchIndexName: e.target.value})}
-                      placeholder="your-search-index-name"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="azure-api-key">Azure API Key</Label>
-                    <div className="relative">
-                      <Input
-                        id="azure-api-key"
-                        type={showSearchKey ? "text" : "password"}
-                        value={azureSettings.apiKey}
-                        onChange={(e) => setAzureSettings({...azureSettings, apiKey: e.target.value})}
-                        placeholder="Your Azure API Key"
-                        className="pr-10"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-10 w-10"
-                        onClick={() => setShowSearchKey(!showSearchKey)}
-                      >
-                        {showSearchKey ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">
-                          {showSearchKey ? "Hide Azure API Key" : "Show Azure API Key"}
-                        </span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Info className="h-4 w-4" />
-                  <span>Optional integration with Azure OpenAI API and Cognitive Search</span>
-                </div>
-                <Button 
-                  onClick={() => handleSaveSettings('azure')}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Settings
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="endpoints" className="space-y-6 animate-fade-in">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <KeyRound className="h-5 w-5" />
-                      Manage API Keys & Endpoints
-                    </CardTitle>
-                    <CardDescription>
-                      Add and manage your API endpoints for different AI providers
-                    </CardDescription>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setIsAddingEndpoint(true)}
-                    className="flex gap-1"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Endpoint
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isAddingEndpoint ? (
-                  <div className="space-y-4 p-4 border rounded-md bg-muted/30">
-                    <div className="text-lg font-medium">
-                      {isEditingEndpoint ? "Edit API Endpoint" : "Add New API Endpoint"}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="endpoint-name">Name</Label>
-                        <Input 
-                          id="endpoint-name"
-                          value={newEndpoint.name}
-                          onChange={(e) => setNewEndpoint({...newEndpoint, name: e.target.value})}
-                          placeholder="My OpenAI API"
-                        />
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="api-endpoint">API Endpoint</Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>The URL where API requests are sent. For most providers, the default endpoint works, but you can customize it for enterprise accounts or proxy services. Typically ends with /v1 for OpenAI.</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="endpoint-provider">Provider</Label>
-                        <Select
-                          value={newEndpoint.provider}
-                          onValueChange={handleProviderSelect}
+                      <Input
+                        id="api-endpoint"
+                        value={apiSettings.endpoint}
+                        onChange={(e) => setApiSettings({...apiSettings, endpoint: e.target.value})}
+                        placeholder="https://api.openai.com/v1"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="api-key">API Key</Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Your authentication key for the AI service. Keep this secret as it grants access to paid API services. You can get this from your provider's dashboard.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          id="api-key"
+                          type={showApiKey ? "text" : "password"}
+                          value={apiSettings.apiKey}
+                          onChange={(e) => setApiSettings({...apiSettings, apiKey: e.target.value})}
+                          placeholder="Your API key"
+                          className="pr-10"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-10 w-10"
+                          onClick={() => setShowApiKey(!showApiKey)}
                         >
-                          <SelectTrigger id="endpoint-provider">
-                            <SelectValue placeholder="Select a provider" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="OpenAI">OpenAI</SelectItem>
-                            <SelectItem value="Anthropic">Anthropic</SelectItem>
-                            <SelectItem value="Google">Google (Gemini)</SelectItem>
-                            <SelectItem value="Cohere">Cohere</SelectItem>
-                            <SelectItem value="Custom">Custom Provider</SelectItem>
-                          </SelectContent>
-                        </Select>
+                          {showApiKey ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                          <span className="sr-only">
+                            {showApiKey ? "Hide API key" : "Show API key"}
+                          </span>
+                        </Button>
                       </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="endpoint-url">API Endpoint URL</Label>
-                        <Input 
-                          id="endpoint-url"
-                          value={newEndpoint.api_endpoint || ''}
-                          onChange={(e) => setNewEndpoint({...newEndpoint, api_endpoint: e.target.value})}
-                          placeholder="https://api.openai.com/v1"
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="endpoint-key">API Key</Label>
-                        <div className="relative">
-                          <Input 
-                            id="endpoint-key"
-                            type={showNewApiKey ? "text" : "password"}
-                            value={newEndpoint.api_key || ''}
-                            onChange={(e) => setNewEndpoint({...newEndpoint, api_key: e.target.value})}
-                            placeholder="Your API key"
-                            className="pr-10"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-0 top-0 h-10 w-10"
-                            onClick={() => setShowNewApiKey(!showNewApiKey)}
-                          >
-                            {showNewApiKey ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                            <span className="sr-only">
-                              {showNewApiKey ? "Hide API key" : "Show API key"}
-                            </span>
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="endpoint-model">Default Model</Label>
-                        <Input 
-                          id="endpoint-model"
-                          value={newEndpoint.model || ''}
-                          onChange={(e) => setNewEndpoint({...newEndpoint, model: e.target.value})}
-                          placeholder="e.g., gpt-4o, claude-3-opus"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-end gap-2 mt-4">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => {
-                          setIsAddingEndpoint(false);
-                          setIsEditingEndpoint(false);
-                          setNewEndpoint({
-                            name: '',
-                            api_endpoint: '',
-                            api_key: '',
-                            model: '',
-                            provider: 'OpenAI'
-                          });
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button onClick={handleAddEndpoint} disabled={saving}>
-                        {saving ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            {isEditingEndpoint ? "Update" : "Add"} Endpoint
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ) : apiEndpoints.length === 0 ? (
-                  <div className="text-center py-8">
-                    <KeyRound className="h-8 w-8 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-medium mb-2">No API Endpoints</h3>
-                    <p className="text-muted-foreground mb-4">
-                      You haven't added any API endpoints yet.
-                    </p>
-                    <Button 
-                      onClick={() => setIsAddingEndpoint(true)}
-                      className="flex items-center gap-1"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Endpoint
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Provider</TableHead>
-                          <TableHead>Model</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {apiEndpoints.map((endpoint) => (
-                          <TableRow key={endpoint.id}>
-                            <TableCell className="font-medium">{endpoint.name}</TableCell>
-                            <TableCell>{endpoint.provider}</TableCell>
-                            <TableCell>{endpoint.model || '-'}</TableCell>
-                            <TableCell>
-                              {endpoint.is_active ? (
-                                <span className="flex items-center gap-1 text-green-600">
-                                  <BadgeCheck className="h-4 w-4" />
-                                  Active
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">Inactive</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                {!endpoint.is_active && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm"
-                                    title="Set as active"
-                                    onClick={() => handleSetActiveEndpoint(endpoint.id)}
-                                  >
-                                    <Check className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  title="Edit endpoint"
-                                  onClick={() => handleEditEndpoint(endpoint)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                                  title="Delete endpoint"
-                                  onClick={() => handleDeleteEndpoint(endpoint.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="advanced" className="space-y-6 animate-fade-in">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <SettingsIcon className="h-5 w-5" />
-                  Advanced Settings
-                </CardTitle>
-                <CardDescription>
-                  Configure advanced settings for your AI interactions
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="instructions" className="text-base">Default Instructions</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Set the system prompt / instructions for the AI. This defines the AI's behavior and capabilities.
-                    </p>
-                    <Textarea 
-                      id="instructions"
-                      value={apiSettings.instructions}
-                      onChange={(e) => setApiSettings({...apiSettings, instructions: e.target.value})}
-                      placeholder="You are a helpful assistant..."
-                      className="min-h-[120px]"
-                    />
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-base">Request Template Editor</Label>
-                      <Switch 
-                        checked={advancedSettings.showAdvanced}
-                        onCheckedChange={(checked) => setAdvancedSettings({...advancedSettings, showAdvanced: checked})}
-                      />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Customize the exact JSON structure sent to the API (for advanced users).
-                    </p>
-                    
-                    {advancedSettings.showAdvanced && (
-                      <div className="mt-4 border rounded-md p-4 bg-muted/30">
-                        <Alert className="mb-4">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>
-                            Modifying the request template may affect application functionality. Only make changes if you understand the API schema.
-                          </AlertDescription>
-                        </Alert>
-                        
-                        <RequestTemplateEditor
-                          initialValue={advancedSettings.requestTemplate}
-                          provider={newEndpoint.provider || 'OpenAI'}
-                          onChange={(value) => setAdvancedSettings({...advancedSettings, requestTemplate: value})}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  onClick={() => handleSaveSettings('advanced')}
-                  className="ml-auto"
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Advanced Settings
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </MainLayout>
-  );
-};
-
-export default Settings;
