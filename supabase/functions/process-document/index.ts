@@ -1,8 +1,8 @@
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
-import * as pdfParse from 'https://esm.sh/pdf-parse@1.1.1';
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import * as mammoth from "https://esm.sh/mammoth@1.6.0";
+import * as pdfParse from "https://esm.sh/pdf-parse@1.1.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
