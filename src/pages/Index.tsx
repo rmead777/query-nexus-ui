@@ -1,28 +1,11 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatOutput } from '@/components/chat/ChatOutput';
-import { SourcePanel } from '@/components/sources/SourcePanel';
-import { DocumentUpload } from '@/components/documents/DocumentUpload';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useToast } from "@/components/ui/use-toast";
-import { useNavigate } from 'react-router-dom';
-import { Settings, FileText, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle
-} from '@/components/ui/resizable';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useConversationStore, Message } from '@/hooks/use-conversation-store';
+import { supabase } from '@/integrations/supabase/client';
+import { v4 } from '@/lib/uuid';
+import { useConversationStore } from '@/hooks/use-conversation-store';
 
 interface Source {
   id: string;
@@ -61,7 +44,6 @@ const Index = () => {
   const { user } = useAuth();
   const isMobile = useIsMobile();
   
-  // Initialize conversation if needed
   useEffect(() => {
     if (!currentConversation) {
       startNewConversation();
@@ -202,7 +184,6 @@ const Index = () => {
   };
   
   const handleSendMessage = async (message: string) => {
-    // Add user message to conversation state
     addMessage({
       content: message,
       role: 'user'
@@ -344,7 +325,6 @@ const Index = () => {
                          "I'm sorry, I couldn't process your request at this time.";
       }
       
-      // Add assistant response to conversation state
       addMessage({
         content: assistantContent,
         role: 'assistant'
@@ -400,7 +380,6 @@ const Index = () => {
         variant: "destructive"
       });
       
-      // Add error response to conversation state
       addMessage({
         content: "I'm sorry, I encountered an error while processing your request. Please try again or check if your documents are properly uploaded.",
         role: 'assistant'
