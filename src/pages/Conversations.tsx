@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Star } from 'lucide-react';
-import { useConversationStore, jsonbToMessages } from '@/hooks/use-conversation-store';
+import { useConversationStore } from '@/hooks/use-conversation-store';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';

@@ -8,7 +8,7 @@ import { AdvancedTab } from '@/components/settings/AdvancedTab';
 import { AzureTab } from '@/components/settings/AzureTab';
 import { EndpointsTab } from '@/components/settings/EndpointsTab';
 import { useToast } from "@/components/ui/use-toast";
-import { useSettings } from '@/hooks/use-settings';
+import { useSettings, ResponseSourceSettings } from '@/hooks/use-settings';
 
 const Settings = () => {
   const { toast } = useToast();

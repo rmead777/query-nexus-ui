@@ -6,6 +6,45 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { v4 } from '@/lib/uuid';
 import { useConversationStore } from '@/hooks/use-conversation-store';
+import { useToast } from '@/components/ui/use-toast';
+import { useNavigate } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle
+} from "@/components/ui/resizable";
+import { SourcePanel } from '@/components/sources/SourcePanel';
+import {
+  Card,
+  CardContent
+} from "@/components/ui/card";
+import {
+  Button
+} from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from "@/components/ui/tooltip";
+import {
+  Alert,
+  AlertCircle,
+  AlertTitle,
+  AlertDescription
+} from "@/components/ui/alert";
+import {
+  RadioGroup,
+  RadioGroupItem
+} from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { 
+  FileText,
+  Settings as SettingsIcon,
+  Loader2
+} from "lucide-react";
+import { DocumentUpload } from '@/components/documents/DocumentUpload';
 
 interface Source {
   id: string;
@@ -469,7 +508,7 @@ const Index = () => {
                         className="flex items-center gap-1.5"
                         onClick={() => navigate('/settings?tab=preferences')}
                       >
-                        <Settings className="h-4 w-4" />
+                        <SettingsIcon className="h-4 w-4" />
                         <span className="text-xs font-normal">Preferences</span>
                       </Button>
                     </TooltipTrigger>

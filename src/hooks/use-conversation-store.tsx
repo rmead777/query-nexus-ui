@@ -21,13 +21,13 @@ export interface ConversationState {
 }
 
 // Helper function to convert our Message type to a JSONB-safe format
-const messagesToJsonb = (messages: Message[]): Json => {
+const messagesToJsonb = (messages: Message[]): any => {
   return messages.map(msg => ({
     id: msg.id,
     content: msg.content,
     role: msg.role,
     timestamp: msg.timestamp.toISOString()
-  })) as Json;
+  }));
 };
 
 // Helper function to convert JSONB messages back to our Message type
@@ -105,7 +105,7 @@ export function useConversationStore() {
         
         if (existingConversation) {
           // Update existing conversation
-          await supabase
+          const { error } = await supabase
             .from('conversations')
             .update({
               title: currentConversation.title || preview,
@@ -115,9 +115,11 @@ export function useConversationStore() {
               is_favorite: false
             })
             .eq('id', currentConversation.id);
+          
+          if (error) throw error;
         } else {
           // Insert new conversation
-          await supabase
+          const { error } = await supabase
             .from('conversations')
             .insert({
               id: currentConversation.id,
@@ -128,6 +130,8 @@ export function useConversationStore() {
               is_favorite: false,
               user_id: user.id
             });
+          
+          if (error) throw error;
         }
       } catch (error) {
         console.error('Error saving conversation:', error);

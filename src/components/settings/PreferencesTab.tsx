@@ -57,6 +57,43 @@ export function PreferencesTab({
             disabled={!isLoaded}
           />
         </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="show-citations">Show Citations</Label>
+            <CardDescription>Display citations for AI-generated responses.</CardDescription>
+          </div>
+          <Switch 
+            id="show-citations" 
+            checked={showCitations} 
+            onCheckedChange={setShowCitations}
+          />
+        </div>
+        
+        {showCitations && (
+          <div className="mt-4">
+            <Label htmlFor="citation-style">Citation Style</Label>
+            <select 
+              id="citation-style"
+              value={citationStyle}
+              onChange={(e) => setCitationStyle(e.target.value)}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+            >
+              <option value="inline">Inline</option>
+              <option value="footnote">Footnote</option>
+              <option value="endnote">Endnote</option>
+            </select>
+          </div>
+        )}
+        
+        <div className="flex justify-end mt-6">
+          <Button 
+            onClick={handleSave} 
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save Preferences'}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
