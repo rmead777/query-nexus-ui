@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
@@ -33,6 +32,9 @@ interface Document {
   uploadDate: Date;
   url: string;
   document_id?: string;
+  is_readable?: boolean;
+  needs_processing?: boolean;
+  extraction_method?: string;
 }
 
 const Documents = () => {
@@ -74,7 +76,10 @@ const Documents = () => {
         size: doc.size,
         uploadDate: new Date(doc.upload_date),
         url: doc.url,
-        document_id: doc.document_id
+        document_id: doc.document_id,
+        is_readable: doc.is_readable,
+        needs_processing: doc.needs_processing,
+        extraction_method: doc.extraction_method
       }));
       
       setDocuments(formattedDocs);
@@ -91,7 +96,6 @@ const Documents = () => {
   };
   
   const handleFileUpload = (files: File[]) => {
-    // Refresh document list after upload
     fetchDocuments();
   };
   
@@ -104,7 +108,6 @@ const Documents = () => {
     setIsDeleting(true);
     
     try {
-      // First delete the file from storage
       if (documentToDelete.document_id) {
         const filePath = `${user.id}/${documentToDelete.document_id}`;
         const { error: storageError } = await supabase
@@ -117,7 +120,6 @@ const Documents = () => {
         }
       }
       
-      // Then delete the database entry
       const { error: dbError } = await supabase
         .from('documents')
         .delete()
@@ -174,6 +176,28 @@ const Documents = () => {
       return <FileImage className="h-10 w-10 text-purple-500" />;
     } else {
       return <FileText className="h-10 w-10 text-gray-500" />;
+    }
+  };
+  
+  const getDocumentStatus = (document: Document) => {
+    if (document.is_readable) {
+      return {
+        text: "Ready for analysis",
+        icon: <FileText className="h-3.5 w-3.5 text-green-500" />,
+        className: "text-green-600 bg-green-100"
+      };
+    } else if (document.needs_processing) {
+      return {
+        text: "Processing required",
+        icon: <AlertCircle className="h-3.5 w-3.5 text-amber-500" />,
+        className: "text-amber-600 bg-amber-100"
+      };
+    } else {
+      return {
+        text: "Check status",
+        icon: <AlertCircle className="h-3.5 w-3.5 text-gray-500" />,
+        className: "text-gray-600 bg-gray-100"
+      };
     }
   };
   
@@ -254,72 +278,83 @@ const Documents = () => {
             </div>
           ) : filteredDocuments.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredDocuments.map((document) => (
-                <Card 
-                  key={document.id}
-                  className="overflow-hidden transition-all duration-200 hover:shadow-md animate-fade-in"
-                >
-                  <div className="flex p-4">
-                    <div className="flex items-center justify-center h-16 w-16 bg-muted/50 rounded mr-4">
-                      {getFileIcon(document.type)}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base truncate">
-                        {document.name}
-                      </CardTitle>
+              {filteredDocuments.map((document) => {
+                const status = getDocumentStatus(document);
+                
+                return (
+                  <Card 
+                    key={document.id}
+                    className="overflow-hidden transition-all duration-200 hover:shadow-md animate-fade-in"
+                  >
+                    <div className="flex p-4">
+                      <div className="flex items-center justify-center h-16 w-16 bg-muted/50 rounded mr-4">
+                        {getFileIcon(document.type)}
+                      </div>
                       
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
-                          <span>{formatDate(document.uploadDate)}</span>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base truncate">
+                          {document.name}
+                        </CardTitle>
+                        
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            <span>{formatDate(document.uploadDate)}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatSize(document.size)}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatSize(document.size)}
+                        
+                        <div className="mt-2">
+                          <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${status.className}`}>
+                            {status.icon}
+                            <span className="ml-1">{status.text}</span>
+                          </span>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <CardFooter className="p-3 pt-0 flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      asChild
-                    >
-                      <a href={document.url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                        View
-                      </a>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      asChild
-                    >
-                      <a href={document.url} download>
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        Download
-                      </a>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                      onClick={() => handleDelete(document.id)}
-                      disabled={isDeleting}
-                    >
-                      {isDeleting ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
+                    
+                    <CardFooter className="p-3 pt-0 flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        asChild
+                      >
+                        <a href={document.url} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                          View
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        asChild
+                      >
+                        <a href={document.url} download>
+                          <Download className="h-3.5 w-3.5 mr-1.5" />
+                          Download
+                        </a>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => handleDelete(document.id)}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12 animate-fade-in">

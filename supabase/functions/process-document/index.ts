@@ -1,6 +1,8 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
+import * as pdfParse from 'https://esm.sh/pdf-parse@1.1.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -88,61 +90,99 @@ serve(async (req) => {
     // Extract content based on file type
     let content = "";
     let extractionMethod = "unknown";
+    let isReadable = false;
     const fileName = document.name.toLowerCase();
     const fileType = document.type || getMimeTypeFromFileName(fileName);
     
-    // IMPORTANT: We only process plaintext files directly
-    // Binary files like PDFs/DOCXs are flagged for external processing
     try {
-      // Only attempt to extract text from plain text files
+      // Convert blob to ArrayBuffer for processing
+      const arrayBuffer = await fileData.arrayBuffer();
+      
+      // Process based on file type
       if (fileName.endsWith('.txt') || 
           fileName.endsWith('.md') || 
           fileType.includes('text/plain') || 
           fileType.includes('markdown')) {
         console.log('Extracting text from plain text document');
-        content = await fileData.text();
+        // For text files, we can safely use text decoding
+        const textDecoder = new TextDecoder('utf-8');
+        content = textDecoder.decode(arrayBuffer);
         extractionMethod = "text";
+        isReadable = true;
       } 
       else if (fileName.endsWith('.pdf') || fileType.includes('pdf')) {
-        console.log('Processing PDF document - storing placeholder');
-        extractionMethod = "pdf_binary";
-        content = "This document is a PDF that needs specialized processing. PDF content will be available after processing.";
+        console.log('Processing PDF document with pdf-parse');
+        try {
+          // Use pdf-parse to extract text from PDF
+          const pdfData = await pdfParse.default(new Uint8Array(arrayBuffer));
+          content = pdfData.text || "";
+          
+          // Check if we got meaningful content
+          if (content && content.trim().length > 100) {
+            extractionMethod = "pdf_extracted";
+            isReadable = true;
+            console.log(`Successfully extracted PDF text, length: ${content.length} chars`);
+          } else {
+            extractionMethod = "pdf_extraction_failed";
+            content = "This PDF document could not be parsed automatically. It may be a scanned document requiring OCR processing.";
+            isReadable = false;
+          }
+        } catch (pdfError) {
+          console.error('PDF extraction error:', pdfError);
+          extractionMethod = "pdf_extraction_error";
+          content = "There was an error processing this PDF document. It may require specialized handling.";
+          isReadable = false;
+        }
       } 
       else if (fileName.endsWith('.docx') || 
                 fileType.includes('word') || 
                 fileType.includes('officedocument')) {
-        console.log('Processing DOCX document - storing placeholder');
-        extractionMethod = "docx_binary";
-        content = "This document is a DOCX file that needs specialized processing. Document content will be available after processing.";
+        console.log('Processing DOCX document with mammoth');
+        try {
+          // Use mammoth to extract text from DOCX
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          content = result.value || "";
+          
+          // Check if we got meaningful content
+          if (content && content.trim().length > 50) {
+            extractionMethod = "docx_extracted";
+            isReadable = true;
+            console.log(`Successfully extracted DOCX text, length: ${content.length} chars`);
+          } else {
+            extractionMethod = "docx_extraction_failed";
+            content = "This DOCX document could not be parsed automatically. It may require specialized handling.";
+            isReadable = false;
+          }
+        } catch (docxError) {
+          console.error('DOCX extraction error:', docxError);
+          extractionMethod = "docx_extraction_error";
+          content = "There was an error processing this DOCX document. It may require specialized handling.";
+          isReadable = false;
+        }
       } 
       else {
-        // For other files, we don't attempt text extraction at all
-        console.log('Unknown binary document type - storing placeholder');
-        extractionMethod = "binary";
-        content = "This document type requires specialized processing. Content will be extracted separately.";
+        // For other files, we don't attempt text extraction
+        console.log('Unknown document type - cannot extract text');
+        extractionMethod = "unsupported_format";
+        content = "This document type is not supported for automatic text extraction.";
+        isReadable = false;
       }
     } catch (extractionError) {
       console.error('Extraction error:', extractionError);
       extractionMethod = "error";
       content = "There was an error processing this document. It may require specialized handling.";
+      isReadable = false;
     }
     
-    // Flag all binary documents for external processing
-    const isBinaryDocument = fileName.endsWith('.pdf') || 
-                            fileName.endsWith('.docx') || 
-                            fileType.includes('pdf') || 
-                            fileType.includes('word') ||
-                            fileType.includes('officedocument');
-    
-    // Update the document with extracted content or placeholder for binary files
+    // Update the document with extracted content
     try {                         
       const { error: updateError } = await supabase
         .from('documents')
         .update({ 
           content,
           extraction_method: extractionMethod,
-          is_readable: extractionMethod === "text",
-          needs_processing: isBinaryDocument
+          is_readable: isReadable,
+          needs_processing: !isReadable
         })
         .eq('document_id', documentId);
 
@@ -164,12 +204,11 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         message: 'Document processed successfully',
-        content_extracted: extractionMethod === "text",
+        content_extracted: isReadable,
         extraction_method: extractionMethod,
         document_type: document.type,
         document_name: document.name,
-        is_binary: isBinaryDocument,
-        readable_content: extractionMethod === "text",
+        readable_content: isReadable,
         content_sample: content.substring(0, 100) + '...',
         content_length: content.length
       }),
