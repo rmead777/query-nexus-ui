@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -7,12 +6,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// PDF.js for PDF text extraction via CDN
+// PDF.js library
 import 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.min.js';
 const pdfjsLib = (globalThis as any).pdfjsLib;
 
 // For DOCX text extraction
 import * as JSZip from 'https://esm.sh/jszip@3.10.1';
+import * as xml2js from 'https://esm.sh/xml2js@0.6.2';
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -58,7 +58,7 @@ serve(async (req) => {
     if (!forceReprocess && 
         document.content && 
         document.content.length > 100 && 
-        isReadableText(document.content)) {
+        document.is_readable) {
       console.log('Document already has readable content, skipping extraction');
       return new Response(
         JSON.stringify({ 
@@ -116,54 +116,57 @@ serve(async (req) => {
         extractionMethod = "text";
       } 
       else {
-        // Try different extraction methods in sequence
+        // Try different extraction methods
         console.log('Unknown document type, trying multiple extraction methods');
+        
+        // First try as plain text
         try {
-          // First try as text
           content = await fileData.text();
-          if (isReadableText(content)) {
+          if (content && isReadableText(content)) {
             console.log('Successfully extracted as plain text');
             extractionMethod = "text";
           } else {
-            // Try as PDF
+            throw new Error("Plain text extraction didn't yield readable results");
+          }
+        } catch (textError) {
+          console.log('Plain text extraction failed, trying PDF extraction');
+          
+          // Try as PDF
+          try {
+            content = await extractPdfText(fileData);
+            if (content && isReadableText(content)) {
+              console.log('Successfully extracted as PDF');
+              extractionMethod = "pdf";
+            } else {
+              throw new Error("PDF extraction didn't yield readable results");
+            }
+          } catch (pdfError) {
+            console.log('PDF extraction failed, trying DOCX extraction');
+            
+            // Try as DOCX
             try {
-              content = await extractPdfText(fileData);
-              if (isReadableText(content)) {
-                console.log('Successfully extracted as PDF');
-                extractionMethod = "pdf";
+              content = await extractDocxText(fileData);
+              if (content && isReadableText(content)) {
+                console.log('Successfully extracted as DOCX');
+                extractionMethod = "docx";
               } else {
-                throw new Error("PDF extraction yielded unreadable text");
+                throw new Error("DOCX extraction didn't yield readable results");
               }
-            } catch (pdfError) {
-              console.log('PDF extraction failed, trying DOCX extraction');
-              // Try as DOCX
-              try {
-                content = await extractDocxText(fileData);
-                if (isReadableText(content)) {
-                  console.log('Successfully extracted as DOCX');
-                  extractionMethod = "docx";
-                } else {
-                  throw new Error("DOCX extraction yielded unreadable text");
-                }
-              } catch (docxError) {
-                console.error('All extraction methods failed');
-                throw new Error("Could not extract readable text using any available method");
-              }
+            } catch (docxError) {
+              console.error('All extraction methods failed');
+              content = "The system could not extract readable text from this document. It may be scanned, image-based, encrypted, or in an unsupported format.";
+              extractionMethod = "failed";
             }
           }
-        } catch (error) {
-          console.error('Failed to extract text:', error);
-          content = "Could not extract readable text from this document. The file format may not be supported or the document may be encrypted.";
-          extractionMethod = "failed";
         }
       }
     } catch (extractionError) {
       console.error('Extraction error:', extractionError);
-      content = `Error extracting content: ${extractionError.message}`;
+      content = `Failed to extract content: ${extractionError.message}`;
       extractionMethod = "error";
     }
     
-    // Clean up the content
+    // Clean up the content - be more aggressive about removing binary content
     content = cleanupExtractedText(content);
     
     // Check if content is readable
@@ -220,12 +223,13 @@ serve(async (req) => {
   }
 });
 
-// Extract text from a PDF using PDF.js
+// Improved PDF text extraction with better error handling
 async function extractPdfText(file) {
   console.log("Starting PDF extraction with PDF.js");
-  const arrayBuffer = await file.arrayBuffer();
   
   try {
+    const arrayBuffer = await file.arrayBuffer();
+    
     // Load PDF document
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
     const pdf = await loadingTask.promise;
@@ -236,18 +240,31 @@ async function extractPdfText(file) {
     // Process each page
     for (let i = 1; i <= pdf.numPages; i++) {
       try {
+        console.log(`Processing page ${i} of ${pdf.numPages}`);
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
         
+        if (!textContent || !textContent.items || textContent.items.length === 0) {
+          console.log(`No text content in page ${i}, possibly scanned or image-based`);
+          continue;
+        }
+        
         // Extract text with proper spacing
         const pageText = textContent.items
-          .map(item => item.str)
+          .map(item => {
+            // Check if item has string property
+            return item.str || "";
+          })
           .join(' ');
         
         fullText += pageText + "\n\n";
       } catch (pageError) {
         console.error(`Error extracting text from page ${i}:`, pageError);
       }
+    }
+    
+    if (fullText.trim().length === 0) {
+      throw new Error("No text content extracted from PDF. This might be a scanned document or image-based PDF.");
     }
     
     console.log(`Extracted ${fullText.length} characters from PDF`);
@@ -258,14 +275,16 @@ async function extractPdfText(file) {
   }
 }
 
-// Extract text from a DOCX file using JSZip
+// Improved DOCX extraction
 async function extractDocxText(file) {
   console.log("Starting DOCX extraction with JSZip");
-  const arrayBuffer = await file.arrayBuffer();
   
   try {
+    const arrayBuffer = await file.arrayBuffer();
+    
     // Load DOCX as ZIP
     const zip = await JSZip.loadAsync(arrayBuffer);
+    let textContent = "";
     
     // DOCX files store content in word/document.xml
     const documentXml = await zip.file("word/document.xml")?.async("text");
@@ -274,33 +293,151 @@ async function extractDocxText(file) {
       throw new Error("Missing word/document.xml in DOCX file");
     }
     
-    // Process XML content
-    let text = documentXml;
+    // XML parsing for better text extraction
+    try {
+      // First, extract text directly from XML by removing tags
+      textContent = documentXml
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Attempt to parse XML for better structure if possible
+      const parser = new xml2js.Parser({ explicitArray: false });
+      const result = await parser.parseStringPromise(documentXml);
+      
+      if (result && result.document && result.document.body) {
+        const paragraphs = [];
+        extractParagraphs(result.document.body, paragraphs);
+        
+        if (paragraphs.length > 0) {
+          textContent = paragraphs.join('\n\n');
+        }
+      }
+    } catch (xmlError) {
+      console.log("XML parsing failed, using simple text extraction", xmlError);
+      // Already have textContent from regex, so continue
+    }
     
-    // Remove XML tags
-    text = text.replace(/<[^>]+>/g, ' ');
-    
-    // Clean up whitespace
-    text = text.replace(/\s+/g, ' ').trim();
-    
-    // Decode XML entities
-    text = text
+    // Clean and decode XML entities
+    textContent = textContent
       .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
     
-    console.log(`Extracted ${text.length} characters from DOCX`);
-    return text;
+    if (textContent.length === 0) {
+      // Check if there's content in document.xml.rels
+      try {
+        const relationshipsXml = await zip.file("word/_rels/document.xml.rels")?.async("text");
+        if (relationshipsXml && relationshipsXml.includes("<Relationship")) {
+          console.log("Found relationships but no text content, possibly a complex document with embedded objects");
+        }
+      } catch (relError) {
+        console.log("No relationships found");
+      }
+      
+      throw new Error("No text content extracted from DOCX");
+    }
+    
+    console.log(`Extracted ${textContent.length} characters from DOCX`);
+    return textContent;
   } catch (error) {
     console.error("DOCX extraction failed:", error);
     throw new Error(`DOCX extraction error: ${error.message}`);
   }
 }
 
-// Determine if text is readable
+// Helper function to extract paragraphs from XML structure
+function extractParagraphs(node, paragraphs) {
+  if (!node) return;
+  
+  if (node.p) {
+    if (Array.isArray(node.p)) {
+      node.p.forEach(p => {
+        const text = extractTextFromParagraph(p);
+        if (text) paragraphs.push(text);
+      });
+    } else {
+      const text = extractTextFromParagraph(node.p);
+      if (text) paragraphs.push(text);
+    }
+  }
+  
+  // Check for tables, sections, etc.
+  if (node.tbl) {
+    if (Array.isArray(node.tbl)) {
+      node.tbl.forEach(tbl => {
+        if (tbl.tr) {
+          if (Array.isArray(tbl.tr)) {
+            tbl.tr.forEach(tr => {
+              if (tr.tc) {
+                if (Array.isArray(tr.tc)) {
+                  tr.tc.forEach(tc => extractParagraphs(tc, paragraphs));
+                } else {
+                  extractParagraphs(tr.tc, paragraphs);
+                }
+              }
+            });
+          } else if (tbl.tr.tc) {
+            extractParagraphs(tbl.tr.tc, paragraphs);
+          }
+        }
+      });
+    } else if (node.tbl.tr) {
+      // Handle single table
+      if (Array.isArray(node.tbl.tr)) {
+        node.tbl.tr.forEach(tr => {
+          if (tr.tc) extractParagraphs(tr.tc, paragraphs);
+        });
+      } else if (node.tbl.tr.tc) {
+        extractParagraphs(node.tbl.tr.tc, paragraphs);
+      }
+    }
+  }
+  
+  // Check for other container elements
+  ['body', 'content', 'div', 'section'].forEach(container => {
+    if (node[container]) extractParagraphs(node[container], paragraphs);
+  });
+}
+
+// Helper function to extract text from paragraph node
+function extractTextFromParagraph(p) {
+  if (!p) return "";
+  
+  // Handle nested r/t structure (runs of text)
+  let text = "";
+  
+  if (p.r) {
+    if (Array.isArray(p.r)) {
+      p.r.forEach(r => {
+        if (r.t) text += (typeof r.t === 'string' ? r.t : r.t._) + " ";
+      });
+    } else if (p.r.t) {
+      text += (typeof p.r.t === 'string' ? p.r.t : p.r.t._) + " ";
+    }
+  } else if (p.t) {
+    // Direct text
+    text += (typeof p.t === 'string' ? p.t : p.t._) + " ";
+  } else if (typeof p === 'string') {
+    // Plain text
+    text = p;
+  } else if (p._) {
+    // Text might be in _
+    text = p._;
+  } else if (p.w_t) {
+    // Some variations use w:t instead of t
+    text = typeof p.w_t === 'string' ? p.w_t : p.w_t._;
+  }
+  
+  return text.trim();
+}
+
+// Improved readability detection
 function isReadableText(text) {
   if (!text || text.length < 50) return false;
   
@@ -321,29 +458,40 @@ function isReadableText(text) {
     sample.includes('%PDF') || 
     sample.includes('PK\x03\x04') ||
     /[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(sample);
+    
+  // Check for high concentration of Unicode replacement characters
+  const replacementCharRatio = (sample.match(/�/g) || []).length / totalCount;
   
   // For human-readable text we expect:
-  // - Sufficient letters (>30%)
+  // - Sufficient letters (>25%)
   // - Adequate spaces (>5%)
+  // - Low concentration of replacement chars (<10%)
   // - No binary signatures
   return (
-    letterRatio > 0.3 && 
+    letterRatio > 0.25 && 
     spaceRatio > 0.05 && 
+    replacementCharRatio < 0.1 &&
     !hasBinarySignatures
   );
 }
 
-// Clean up extracted text
+// More aggressive cleanup for extracted text
 function cleanupExtractedText(text) {
   if (!text) return "";
   
   // Multi-stage cleanup for better results
   return text
-    .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove control characters
-    .replace(/�/g, '') // Remove replacement character
-    .replace(/[^\x20-\x7E\n\r\t\u00A0-\u00FF]/g, ' ') // Keep ASCII and basic Latin
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .replace(/(\s*\n\s*){3,}/g, '\n\n') // Normalize line breaks
+    // Remove control characters
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '') 
+    // Remove replacement characters
+    .replace(/�/g, '') 
+    // Keep ASCII and basic Latin
+    .replace(/[^\x20-\x7E\n\r\t\u00A0-\u00FF]/g, ' ') 
+    // Normalize whitespace
+    .replace(/\s+/g, ' ') 
+    // Normalize line breaks
+    .replace(/(\s*\n\s*){3,}/g, '\n\n') 
+    // Trim
     .trim();
 }
 
