@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -24,7 +23,6 @@ export interface APISettingsTabProps {
   setApiSettings: React.Dispatch<React.SetStateAction<ApiSettings>>;
   apiEndpoints: ApiEndpoint[];
   selectedEndpointId: string | null;
-  setSelectedEndpointId: React.Dispatch<React.SetStateAction<string | null>>;
   modelOptions: ModelOption[];
   selectedModel: string | null;
   handleEndpointSelect: (endpointId: string) => void;
@@ -40,7 +38,6 @@ export const APISettingsTab = ({
   setApiSettings,
   apiEndpoints,
   selectedEndpointId,
-  setSelectedEndpointId,
   modelOptions,
   selectedModel,
   handleEndpointSelect,
@@ -70,7 +67,6 @@ export const APISettingsTab = ({
                 <Select 
                   value={selectedEndpointId || undefined} 
                   onValueChange={(value) => {
-                    setSelectedEndpointId(value);
                     handleEndpointSelect(value);
                   }}
                 >

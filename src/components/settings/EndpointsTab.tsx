@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,7 +13,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 interface EndpointsTabProps {
   apiEndpoints: ApiEndpoint[];
   newEndpoint: Partial<ApiEndpoint>;
-  setNewEndpoint: React.Dispatch<React.SetStateAction<Partial<ApiEndpoint>>>;
   isAddingEndpoint: boolean;
   setIsAddingEndpoint: React.Dispatch<React.SetStateAction<boolean>>;
   isEditingEndpoint: boolean;
@@ -31,7 +29,6 @@ interface EndpointsTabProps {
 export const EndpointsTab = ({
   apiEndpoints,
   newEndpoint,
-  setNewEndpoint,
   isAddingEndpoint,
   setIsAddingEndpoint,
   isEditingEndpoint,
@@ -44,6 +41,10 @@ export const EndpointsTab = ({
   showNewApiKey,
   setShowNewApiKey
 }: EndpointsTabProps) => {
+  const updateNewEndpoint = (changes: Partial<ApiEndpoint>) => {
+    console.log("Update endpoint requested:", changes);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <Card>
