@@ -52,6 +52,20 @@ export const AzureTab = ({
   showSearchKey,
   setShowSearchKey
 }: AzureTabProps) => {
+  const handleSaveSettings = (type: string) => {
+    if (type === 'azure') {
+      onSave({
+        useAzure: useAzure,
+        azureApiKey: azureSettings.apiKey,
+        azureEndpointUrl: azureSettings.endpointUrl,
+        azureDeploymentName: azureSettings.deploymentName,
+        azureSearchEndpoint: azureSettings.searchEndpoint,
+        azureSearchKey: azureSettings.searchKey,
+        azureSearchIndexName: azureSettings.searchIndexName
+      });
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <Card>

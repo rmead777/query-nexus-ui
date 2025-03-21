@@ -36,7 +36,7 @@ interface AzureSettingsState {
   searchEndpoint: string;
   searchKey: string;
   searchIndexName: string;
-  apiKey: string; // Added to match AzureSettings interface
+  apiKey: string;
 }
 
 interface AdvancedSettingsState {
@@ -87,7 +87,7 @@ const Settings = () => {
     searchEndpoint: '',
     searchKey: '',
     searchIndexName: '',
-    apiKey: '' // Added to match AzureSettings interface
+    apiKey: ''
   });
 
   const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettingsState>({
@@ -183,7 +183,7 @@ const Settings = () => {
         searchEndpoint: settings.azure_search_endpoint || '',
         searchKey: settings.azure_search_key || '',
         searchIndexName: settings.azure_search_index_name || '',
-        apiKey: settings.azure_api_key || '' // Added to match interface
+        apiKey: settings.azure_api_key || ''
       });
 
       setAdvancedSettings({
@@ -260,10 +260,27 @@ const Settings = () => {
           
           <TabsContent value="azure">
             <AzureTab 
-              azureSettings={azureSettings}
-              setAzureSettings={setAzureSettings}
+              azureSettings={{
+                endpointUrl: azureSettings.endpointUrl,
+                deploymentName: azureSettings.deploymentName,
+                searchEndpoint: azureSettings.searchEndpoint,
+                searchKey: azureSettings.searchKey,
+                searchIndexName: azureSettings.searchIndexName,
+                apiKey: azureSettings.apiKey
+              }}
+              setAzureSettings={(settings) => {
+                setAzureSettings(prev => ({
+                  ...prev,
+                  ...settings
+                }));
+              }}
               useAzure={azureSettings.useAzure}
-              setUseAzure={(useAzureValue) => setAzureSettings(prev => ({...prev, useAzure: useAzureValue}))}
+              setUseAzure={(value) => {
+                setAzureSettings(prev => ({
+                  ...prev,
+                  useAzure: value
+                }));
+              }}
               initialValues={{
                 useAzure: azureSettings.useAzure,
                 azureApiKey: azureSettings.azureApiKey,
