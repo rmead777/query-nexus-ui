@@ -265,12 +265,11 @@ const Settings = () => {
               }}
               useAzure={azureSettings.useAzure}
               setUseAzure={(value) => {
-                setAzureSettings(prev => {
-                  return {
-                    ...prev,
-                    useAzure: value
-                  };
-                });
+                const boolValue = typeof value === 'function' ? value(azureSettings.useAzure) : value;
+                setAzureSettings(prev => ({
+                  ...prev,
+                  useAzure: boolValue
+                }));
               }}
               initialValues={{
                 useAzure: azureSettings.useAzure,
