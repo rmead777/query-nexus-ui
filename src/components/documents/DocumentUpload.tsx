@@ -1,4 +1,3 @@
-
 import { useState, useRef } from 'react';
 import { FileUp, X, File, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
