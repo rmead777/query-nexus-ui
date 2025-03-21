@@ -8,31 +8,17 @@ import { AdvancedTab } from '@/components/settings/AdvancedTab';
 import { AzureTab } from '@/components/settings/AzureTab';
 import { EndpointsTab } from '@/components/settings/EndpointsTab';
 import { useToast } from "@/components/ui/use-toast";
-
-// Temporary stub for useSettings hook
-const useSettings = () => {
-  const [settings, setSettings] = useState(null);
-  
-  const saveSettings = async () => {
-    // Implementation will be added in a future PR
-  };
-  
-  return {
-    settings,
-    saveSettings,
-    isLoading: false
-  };
-};
+import { useSettings } from '@/hooks/use-settings';
 
 const Settings = () => {
   const { toast } = useToast();
   const { settings, saveSettings, isLoading } = useSettings();
   const [saving, setSaving] = useState(false);
 
-  const handleSaveSettings = async () => {
+  const handleSaveSettings = async (newSettings) => {
     setSaving(true);
     try {
-      await saveSettings();
+      await saveSettings(newSettings);
       toast({
         title: "Settings saved!",
         description: "Your settings have been successfully saved.",
@@ -63,15 +49,24 @@ const Settings = () => {
           </TabsList>
           
           <TabsContent value="api">
-            <APISettingsTab />
+            <APISettingsTab 
+              handleSaveSettings={handleSaveSettings}
+              saving={saving}
+            />
           </TabsContent>
           
           <TabsContent value="azure">
-            <AzureTab />
+            <AzureTab 
+              handleSaveSettings={handleSaveSettings}
+              saving={saving}
+            />
           </TabsContent>
           
           <TabsContent value="endpoints">
-            <EndpointsTab />
+            <EndpointsTab 
+              handleSaveSettings={handleSaveSettings}
+              saving={saving}
+            />
           </TabsContent>
           
           <TabsContent value="preferences">
@@ -82,7 +77,10 @@ const Settings = () => {
           </TabsContent>
           
           <TabsContent value="advanced">
-            <AdvancedTab />
+            <AdvancedTab 
+              handleSaveSettings={handleSaveSettings}
+              saving={saving}
+            />
           </TabsContent>
         </Tabs>
       </div>

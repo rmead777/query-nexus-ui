@@ -5,15 +5,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useAutoSavePreference } from '@/hooks/use-auto-save-preference';
 import { Button } from '@/components/ui/button';
+import { useSettings } from '@/hooks/use-settings';
 
-export interface ResponseSourceSettings {
-  useDocuments: boolean;
-  useKnowledgeBase: boolean;
-  useExternalSearch: boolean;
-}
-
-interface PreferencesTabProps {
-  handleSaveSettings: () => void;
+export interface PreferencesTabProps {
+  handleSaveSettings: (newSettings: any) => void;
   saving: boolean;
 }
 
@@ -22,11 +17,25 @@ export function PreferencesTab({
   saving
 }: PreferencesTabProps) {
   const { autoSave, setAutoSavePreference, isLoaded } = useAutoSavePreference();
+  const { settings } = useSettings();
   const [showCitations, setShowCitations] = useState(false);
   const [citationStyle, setCitationStyle] = useState("inline");
   
+  useEffect(() => {
+    if (settings) {
+      setShowCitations(settings.show_citations || false);
+      setCitationStyle(settings.citation_style || "inline");
+    }
+  }, [settings]);
+  
   const handleSave = () => {
-    handleSaveSettings();
+    const newSettings = {
+      auto_save_conversations: autoSave,
+      show_citations: showCitations,
+      citation_style: citationStyle
+    };
+    
+    handleSaveSettings(newSettings);
   };
 
   return (
