@@ -12,6 +12,8 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Toggle, toggleVariants } from '@/components/ui/toggle';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 interface Source {
   id: string;
@@ -30,14 +32,27 @@ interface SourcePanelProps {
 
 export function SourcePanel({ sources }: SourcePanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   
-  const filteredSources = searchQuery
-    ? sources.filter(source => 
+  const filteredSources = sources
+    .filter(source => {
+      // Apply search filter
+      const matchesSearch = !searchQuery ? true : (
         source.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         source.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (source.documentName && source.documentName.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : sources;
+      );
+      
+      // Apply relevance filter
+      let matchesRelevance = true;
+      if (filterMode !== 'all') {
+        const category = source.relevanceCategory || getRelevanceCategoryFromScore(source.relevanceScore);
+        matchesRelevance = category.toLowerCase() === filterMode;
+      }
+      
+      return matchesSearch && matchesRelevance;
+    })
+    .sort((a, b) => b.relevanceScore - a.relevanceScore); // Sort by relevance score
   
   if (sources.length === 0) {
     return (
@@ -80,6 +95,15 @@ export function SourcePanel({ sources }: SourcePanelProps) {
         )}
       </div>
       
+      <div className="mb-4">
+        <ToggleGroup type="single" value={filterMode} onValueChange={(value) => value && setFilterMode(value as any)}>
+          <ToggleGroupItem value="all" aria-label="Show all">All</ToggleGroupItem>
+          <ToggleGroupItem value="high" aria-label="High relevance">High</ToggleGroupItem>
+          <ToggleGroupItem value="medium" aria-label="Medium relevance">Medium</ToggleGroupItem>
+          <ToggleGroupItem value="low" aria-label="Low relevance">Low</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+      
       <ScrollArea className="flex-1 pr-3 -mr-3">
         <div className="space-y-3">
           {filteredSources.map((source) => (
@@ -102,14 +126,14 @@ function SourceItem({ source }: { source: Source }) {
     return "bg-red-400";
   };
 
-  // Determine badge color for relevance category
-  const getBadgeVariant = (category?: string) => {
+  // Determine badge color for relevance category - using allowed variants only
+  const getBadgeVariant = (category?: string): "default" | "secondary" | "destructive" | "outline" => {
     if (!category) return "outline";
     
     switch(category) {
-      case "High": return "success";
-      case "Medium": return "warning";
-      case "Low": return "secondary";
+      case "High": return "default"; // instead of "success"
+      case "Medium": return "secondary"; // instead of "warning"
+      case "Low": return "destructive";
       default: return "outline";
     }
   };
