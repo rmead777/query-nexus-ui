@@ -1,5 +1,6 @@
+
 import { useState, useRef } from 'react';
-import { FileUp, X, File, Loader2 } from 'lucide-react';
+import { FileUp, X, File, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
@@ -7,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { v4 as uuidv4 } from '@/lib/uuid';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 
 interface FileUploadProps {
   onUpload: (files: File[]) => void;
@@ -180,7 +183,7 @@ export function DocumentUpload({
               toast({
                 title: "Document processing issue",
                 description: "The document was uploaded but its content may not be fully readable. You can try reprocessing it later.",
-                variant: "warning"
+                variant: "default"
               });
             }
           }
