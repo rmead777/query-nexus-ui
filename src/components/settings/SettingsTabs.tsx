@@ -60,7 +60,6 @@ export const SettingsTabs: React.FC = () => {
           setApiSettings={setApiSettings}
           apiEndpoints={apiEndpoints}
           selectedEndpointId={selectedEndpointId}
-          setSelectedEndpointId={setSelectedEndpointId}
           modelOptions={[
             { value: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI' },
             { value: 'gpt-4o-mini', label: 'GPT-4o Mini', provider: 'OpenAI' }
@@ -121,7 +120,6 @@ export const SettingsTabs: React.FC = () => {
         <EndpointsTab 
           apiEndpoints={apiEndpoints}
           newEndpoint={newEndpoint}
-          setNewEndpoint={setNewEndpoint}
           isAddingEndpoint={isAddingEndpoint}
           setIsAddingEndpoint={setIsAddingEndpoint}
           isEditingEndpoint={isEditingEndpoint}
