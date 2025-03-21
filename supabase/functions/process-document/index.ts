@@ -7,14 +7,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// PDF.js for proper PDF text extraction - we use a CDN version for the edge function
+// PDF.js for PDF text extraction via CDN
 import 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.min.js';
 const pdfjsLib = (globalThis as any).pdfjsLib;
 
-// For proper DOCX text extraction
+// For DOCX text extraction
 import * as JSZip from 'https://esm.sh/jszip@3.10.1';
 
-// Main document processing function
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -24,7 +23,7 @@ serve(async (req) => {
   try {
     const { documentId, forceReprocess } = await req.json();
     
-    console.log(`Processing document with ID: ${documentId}`);
+    console.log(`Processing document ID: ${documentId}, force reprocess: ${forceReprocess}`);
     
     if (!documentId) {
       return new Response(
@@ -33,12 +32,12 @@ serve(async (req) => {
       );
     }
 
-    // Create a Supabase client
+    // Create Supabase client with service role key for admin access
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get the document metadata from the database
+    // Get document metadata
     const { data: document, error: documentError } = await supabase
       .from('documents')
       .select('*')
@@ -53,10 +52,13 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Found document: ${document.name} (type: ${document.type})`);
+    console.log(`Found document: ${document.name}, type: ${document.type}`);
     
     // Skip processing if document already has readable content and not forcing reprocess
-    if (!forceReprocess && document.content && document.content.length > 100 && isReadableText(document.content)) {
+    if (!forceReprocess && 
+        document.content && 
+        document.content.length > 100 && 
+        isReadableText(document.content)) {
       console.log('Document already has readable content, skipping extraction');
       return new Response(
         JSON.stringify({ 
@@ -69,31 +71,21 @@ serve(async (req) => {
       );
     }
     
-    console.log('Document needs content extraction');
-    
     // Download the document file from storage
     const userId = document.user_id;
     const filePath = `${userId}/${documentId}`;
     
-    console.log(`Attempting to download from storage: ${filePath}`);
+    console.log(`Downloading from storage: ${filePath}`);
     
     const { data: fileData, error: fileError } = await supabase
       .storage
       .from('documents')
       .download(filePath);
 
-    if (fileError) {
-      console.error('Error downloading file from storage:', fileError);
+    if (fileError || !fileData) {
+      console.error('Error downloading file:', fileError);
       return new Response(
         JSON.stringify({ error: 'Failed to download document file', details: fileError }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-    
-    if (!fileData) {
-      console.error('No file data received from storage');
-      return new Response(
-        JSON.stringify({ error: 'No file data received from storage' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
@@ -102,81 +94,101 @@ serve(async (req) => {
     
     // Extract content based on file type
     let content = "";
-    const fileType = document.type || getMimeTypeFromFileName(document.name);
+    let extractionMethod = "unknown";
+    const fileName = document.name.toLowerCase();
+    const fileType = document.type || getMimeTypeFromFileName(fileName);
     
     try {
-      if (fileType.includes('pdf') || document.name.toLowerCase().endsWith('.pdf')) {
-        // Use PDF.js for PDF extraction
-        content = await extractPdfTextWithPdfJs(fileData);
-      } else if (fileType.includes('word') || document.name.toLowerCase().endsWith('.docx')) {
-        // Use JSZip for DOCX extraction
+      if (fileName.endsWith('.pdf') || fileType.includes('pdf')) {
+        console.log('Extracting text from PDF document');
+        content = await extractPdfText(fileData);
+        extractionMethod = "pdf";
+      } 
+      else if (fileName.endsWith('.docx') || fileType.includes('word') || fileType.includes('officedocument')) {
+        console.log('Extracting text from DOCX document');
         content = await extractDocxText(fileData);
-      } else if (fileType.includes('text/plain') || document.name.endsWith('.txt') || document.name.endsWith('.md')) {
-        // Simple text extraction
+        extractionMethod = "docx";
+      } 
+      else if (fileName.endsWith('.txt') || fileName.endsWith('.md') || 
+               fileType.includes('text/plain') || fileType.includes('markdown')) {
+        console.log('Extracting text from plain text document');
         content = await fileData.text();
-      } else {
-        // Try as text first
+        extractionMethod = "text";
+      } 
+      else {
+        // Try different extraction methods in sequence
+        console.log('Unknown document type, trying multiple extraction methods');
         try {
-          const text = await fileData.text();
-          if (isReadableText(text)) {
-            content = text;
+          // First try as text
+          content = await fileData.text();
+          if (isReadableText(content)) {
+            console.log('Successfully extracted as plain text');
+            extractionMethod = "text";
           } else {
-            // Fall back to trying as PDF then DOCX
+            // Try as PDF
             try {
-              content = await extractPdfTextWithPdfJs(fileData);
+              content = await extractPdfText(fileData);
+              if (isReadableText(content)) {
+                console.log('Successfully extracted as PDF');
+                extractionMethod = "pdf";
+              } else {
+                throw new Error("PDF extraction yielded unreadable text");
+              }
             } catch (pdfError) {
+              console.log('PDF extraction failed, trying DOCX extraction');
+              // Try as DOCX
               try {
                 content = await extractDocxText(fileData);
+                if (isReadableText(content)) {
+                  console.log('Successfully extracted as DOCX');
+                  extractionMethod = "docx";
+                } else {
+                  throw new Error("DOCX extraction yielded unreadable text");
+                }
               } catch (docxError) {
-                content = "Could not extract readable text from this document format.";
+                console.error('All extraction methods failed');
+                throw new Error("Could not extract readable text using any available method");
               }
             }
           }
         } catch (error) {
-          console.error('Error extracting text:', error);
-          content = "Error extracting text from this document.";
+          console.error('Failed to extract text:', error);
+          content = "Could not extract readable text from this document. The file format may not be supported or the document may be encrypted.";
+          extractionMethod = "failed";
         }
       }
     } catch (extractionError) {
-      console.error('Error during content extraction:', extractionError);
+      console.error('Extraction error:', extractionError);
       content = `Error extracting content: ${extractionError.message}`;
+      extractionMethod = "error";
     }
     
-    // Clean up the extracted content
+    // Clean up the content
     content = cleanupExtractedText(content);
     
     // Check if content is readable
     const isReadable = isReadableText(content);
-    console.log(`Extracted content is readable: ${isReadable}`);
+    console.log(`Text extraction complete. Method: ${extractionMethod}, Readable: ${isReadable}, Length: ${content.length} chars`);
     
-    if (!isReadable && content.length > 50) {
-      content = "WARNING: The system had difficulty extracting readable text from this document. It may be scanned, encrypted, or in a format that's not fully supported. Below is the best extraction possible:\n\n" + content;
+    if (!isReadable && content.length > 0) {
+      console.log('Content is not readable, adding warning');
+      content = "WARNING: The system couldn't extract readable text from this document. It may be scanned, encrypted, or in an unsupported format. Below is the best extraction possible:\n\n" + content;
     }
     
-    // Update the document with the extracted content
-    try {
-      const { error: updateError } = await supabase
-        .from('documents')
-        .update({ content })
-        .eq('document_id', documentId);
+    // Update the document with extracted content
+    const { error: updateError } = await supabase
+      .from('documents')
+      .update({ 
+        content,
+        extraction_method: extractionMethod,
+        is_readable: isReadable
+      })
+      .eq('document_id', documentId);
 
-      if (updateError) {
-        console.error('Error updating document content:', updateError);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to update document content', 
-            details: updateError 
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-      }
-    } catch (updateError) {
+    if (updateError) {
       console.error('Error updating document:', updateError);
       return new Response(
-        JSON.stringify({ 
-          error: 'Failed to update document', 
-          details: updateError 
-        }),
+        JSON.stringify({ error: 'Failed to update document content', details: updateError }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
@@ -185,8 +197,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Document processed',
+        message: 'Document processed successfully',
         content_extracted: true,
+        extraction_method: extractionMethod,
         document_type: document.type,
         document_name: document.name,
         readable_content: isReadable,
@@ -196,7 +209,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error processing document:', error);
+    console.error('Fatal error processing document:', error);
     return new Response(
       JSON.stringify({ 
         error: 'Failed to process document',
@@ -207,57 +220,61 @@ serve(async (req) => {
   }
 });
 
-// Function to extract text from a PDF using PDF.js
-async function extractPdfTextWithPdfJs(file) {
+// Extract text from a PDF using PDF.js
+async function extractPdfText(file) {
+  console.log("Starting PDF extraction with PDF.js");
+  const arrayBuffer = await file.arrayBuffer();
+  
   try {
-    console.log("Extracting PDF text with PDF.js");
-    const arrayBuffer = await file.arrayBuffer();
-    
-    // Load the PDF document
+    // Load PDF document
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
     const pdf = await loadingTask.promise;
     console.log(`PDF loaded with ${pdf.numPages} pages`);
     
     let fullText = "";
     
-    // Extract text from each page
+    // Process each page
     for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      
-      // Concatenate the text items with proper spacing
-      const pageText = textContent.items
-        .map(item => item.str)
-        .join(' ');
-      
-      fullText += pageText + "\n\n";
+      try {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        
+        // Extract text with proper spacing
+        const pageText = textContent.items
+          .map(item => item.str)
+          .join(' ');
+        
+        fullText += pageText + "\n\n";
+      } catch (pageError) {
+        console.error(`Error extracting text from page ${i}:`, pageError);
+      }
     }
     
-    console.log(`Successfully extracted ${fullText.length} characters from PDF`);
+    console.log(`Extracted ${fullText.length} characters from PDF`);
     return fullText;
   } catch (error) {
-    console.error("Error extracting PDF text with PDF.js:", error);
-    throw new Error(`PDF extraction failed: ${error.message}`);
+    console.error("PDF extraction failed:", error);
+    throw new Error(`PDF extraction error: ${error.message}`);
   }
 }
 
-// Function to extract text from a DOCX file using JSZip
+// Extract text from a DOCX file using JSZip
 async function extractDocxText(file) {
+  console.log("Starting DOCX extraction with JSZip");
+  const arrayBuffer = await file.arrayBuffer();
+  
   try {
-    console.log("Extracting DOCX text with JSZip");
-    const arrayBuffer = await file.arrayBuffer();
-    
-    // Load the DOCX as a ZIP file
+    // Load DOCX as ZIP
     const zip = await JSZip.loadAsync(arrayBuffer);
     
-    // DOCX files store their content in word/document.xml
+    // DOCX files store content in word/document.xml
     const documentXml = await zip.file("word/document.xml")?.async("text");
     
     if (!documentXml) {
-      throw new Error("Could not find content in DOCX file");
+      throw new Error("Missing word/document.xml in DOCX file");
     }
     
-    // Extract text from XML (simple approach)
+    // Process XML content
     let text = documentXml;
     
     // Remove XML tags
@@ -275,40 +292,40 @@ async function extractDocxText(file) {
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'");
     
-    console.log(`Successfully extracted ${text.length} characters from DOCX`);
+    console.log(`Extracted ${text.length} characters from DOCX`);
     return text;
   } catch (error) {
-    console.error("Error extracting DOCX text:", error);
-    throw new Error(`DOCX extraction failed: ${error.message}`);
+    console.error("DOCX extraction failed:", error);
+    throw new Error(`DOCX extraction error: ${error.message}`);
   }
 }
 
-// Function to determine if text is readable
+// Determine if text is readable
 function isReadableText(text) {
-  if (!text || text.length < 20) return false;
+  if (!text || text.length < 50) return false;
   
-  // Sample the text to check for readability
-  const sample = text.slice(0, Math.min(500, text.length));
+  // Get a sample of the text
+  const sample = text.slice(0, Math.min(1000, text.length));
   
-  // Check for reasonable character distribution
+  // Check character distribution
   const letterCount = (sample.match(/[a-zA-Z]/g) || []).length;
   const spaceCount = (sample.match(/\s/g) || []).length;
   const totalCount = sample.length;
   
-  // Text should have a reasonable proportion of letters
+  // Calculate ratios for readability
   const letterRatio = letterCount / totalCount;
-  // Text should have spaces between words
   const spaceRatio = spaceCount / totalCount;
   
-  // Check for binary data signatures
-  const hasBinarySignatures = sample.includes('%PDF') || 
-                              sample.includes('PK\x03\x04') ||
-                              /[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(sample);
+  // Check for binary data markers
+  const hasBinarySignatures = 
+    sample.includes('%PDF') || 
+    sample.includes('PK\x03\x04') ||
+    /[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(sample);
   
-  // For readability we typically expect:
-  // - A significant portion of letters (typically >30%)
-  // - Some spaces between words (typically >5%)
-  // - No binary file signatures
+  // For human-readable text we expect:
+  // - Sufficient letters (>30%)
+  // - Adequate spaces (>5%)
+  // - No binary signatures
   return (
     letterRatio > 0.3 && 
     spaceRatio > 0.05 && 
@@ -316,20 +333,21 @@ function isReadableText(text) {
   );
 }
 
-// Function to clean up extracted text
+// Clean up extracted text
 function cleanupExtractedText(text) {
   if (!text) return "";
   
+  // Multi-stage cleanup for better results
   return text
     .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove control characters
     .replace(/�/g, '') // Remove replacement character
-    .replace(/[^\x20-\x7E\n\r\t\u00A0-\u00FF]/g, ' ') // Keep ASCII and some extended Latin
+    .replace(/[^\x20-\x7E\n\r\t\u00A0-\u00FF]/g, ' ') // Keep ASCII and basic Latin
     .replace(/\s+/g, ' ') // Normalize whitespace
-    .replace(/(\s*\n\s*){3,}/g, '\n\n') // Normalize excessive line breaks
+    .replace(/(\s*\n\s*){3,}/g, '\n\n') // Normalize line breaks
     .trim();
 }
 
-// Function to determine MIME type from filename
+// Get MIME type from filename
 function getMimeTypeFromFileName(filename) {
   if (!filename) return 'application/octet-stream';
   

@@ -1,3 +1,4 @@
+
 import { useState, useRef } from 'react';
 import { FileUp, X, File, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -162,6 +163,7 @@ export function DocumentUpload({
         }
         
         try {
+          console.log(`Processing document ${documentId}`);
           const { data, error } = await supabase.functions.invoke('process-document', {
             body: { 
               documentId,
@@ -172,16 +174,16 @@ export function DocumentUpload({
           if (error) {
             console.error('Error processing document:', error);
             toast({
-              title: "Processing warning",
+              title: "Processing issue",
               description: "The document was uploaded but there was an issue processing its contents. You can try reprocessing it later.",
               variant: "destructive"
             });
           } else {
-            console.log('Document processed successfully:', data);
+            console.log('Document processed:', data);
             if (data && data.readable_content === false) {
               toast({
                 title: "Document processing issue",
-                description: "The document was uploaded but its content may not be fully readable. You can try reprocessing it later.",
+                description: "The document was uploaded but its content may not be fully readable. The system will continue trying to extract text.",
                 variant: "default"
               });
             }
