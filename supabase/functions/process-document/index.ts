@@ -44,73 +44,184 @@ function extractTextFromHTML(html: string): string {
   return text.trim();
 }
 
-// Simplified PDF text extraction with better encoding handling
+// Improved PDF text extraction with better binary handling
 function extractTextFromPDF(buffer: ArrayBuffer): string {
   try {
-    // Use plain text decoder first to check for UTF-8 content
-    const textDecoder = new TextDecoder('utf-8', { fatal: false });
-    const decodedText = textDecoder.decode(buffer);
+    // First, try a simple text decoder approach for text-based PDFs
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    let text = decoder.decode(buffer);
     
-    // Check if we got readable text from standard decoding
-    if (isReadableText(decodedText)) {
-      console.log("Successfully extracted readable text with standard UTF-8 decoding");
-      return cleanupExtractedText(decodedText);
+    // If we have a readable result, return it after cleanup
+    if (isReadableText(text)) {
+      console.log("Successfully extracted readable text from PDF with standard decoding");
+      return cleanupExtractedText(text);
     }
     
-    // If standard method fails, try to extract text objects
-    const text = decodedText;
-    const extractedText: string[] = [];
+    // If basic approach fails, try more aggressive pattern matching for text objects in PDF
+    console.log("Basic PDF text extraction failed, trying pattern matching...");
     
-    // Extract text directly using regex patterns common in PDFs
-    // Look for text blocks
-    const textBlocks = text.match(/\(\s*([A-Za-z0-9\s.,;:'"!?-]{3,})\s*\)/g) || [];
-    for (const block of textBlocks) {
-      const content = block.slice(1, -1).trim();
-      if (content.length > 0 && isReadableText(content)) {
-        extractedText.push(content);
+    // Convert binary data to a string representation we can search
+    const bytes = new Uint8Array(buffer);
+    let binaryString = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binaryString += String.fromCharCode(bytes[i]);
+    }
+    
+    // Look for text objects in PDF format (enclosed in () or <>)
+    const textMatches = [];
+    
+    // Match text within parentheses (common in PDFs)
+    const parenthesesRegex = /\(([^\)]{3,})\)/g;
+    let match;
+    while ((match = parenthesesRegex.exec(binaryString)) !== null) {
+      if (match[1] && match[1].length > 3) {
+        // Filter out binary noise
+        const cleanText = match[1].replace(/[^\x20-\x7E\n\r\t]/g, '');
+        if (cleanText.length > 3) {
+          textMatches.push(cleanText);
+        }
       }
     }
     
-    // If we found readable text via regex
-    if (extractedText.length > 0) {
-      console.log(`Extracted ${extractedText.length} text blocks from PDF using regex pattern matching`);
-      return cleanupExtractedText(extractedText.join(' '));
+    // Match hex-encoded text (also common in PDFs)
+    const hexRegex = /<([0-9A-Fa-f]{6,})>/g;
+    while ((match = hexRegex.exec(binaryString)) !== null) {
+      if (match[1] && match[1].length > 6) {
+        // Convert hex to text
+        try {
+          let hexText = '';
+          for (let i = 0; i < match[1].length; i += 2) {
+            const hexPair = match[1].substr(i, 2);
+            const charCode = parseInt(hexPair, 16);
+            if (charCode >= 32 && charCode <= 126) { // Printable ASCII
+              hexText += String.fromCharCode(charCode);
+            }
+          }
+          if (hexText.length > 3) {
+            textMatches.push(hexText);
+          }
+        } catch (e) {
+          // Ignore conversion errors
+        }
+      }
     }
     
-    // Last resort: try to extract any ASCII text
-    const asciiText = Array.from(new Uint8Array(buffer))
-      .filter(byte => byte >= 32 && byte <= 126) // ASCII printable characters
+    // If we found text matches, join them together
+    if (textMatches.length > 0) {
+      const extractedText = textMatches.join(' ');
+      console.log(`Extracted ${textMatches.length} text fragments from PDF`);
+      return cleanupExtractedText(extractedText);
+    }
+    
+    // Last resort: try to extract any ASCII printable text
+    console.log("Using ASCII filtering as last resort for PDF extraction");
+    const asciiText = Array.from(bytes)
+      .filter(byte => byte >= 32 && byte <= 126) // ASCII printable range
       .map(byte => String.fromCharCode(byte))
       .join('');
-      
-    const cleanedAsciiText = asciiText
-      .replace(/[^\x20-\x7E\n\r\t]/g, '') // Keep only printable ASCII
+    
+    const filteredText = asciiText
+      .replace(/[^\x20-\x7E\n\r\t]/g, '')
       .replace(/\s+/g, ' ')
       .trim();
-      
-    if (cleanedAsciiText.length > 200 && isReadableText(cleanedAsciiText)) {
-      console.log("Extracted text using ASCII character filtering");
-      return cleanupExtractedText(cleanedAsciiText);
+    
+    // Check if we have something readable
+    if (filteredText.length > 200 && isReadableText(filteredText)) {
+      return cleanupExtractedText(filteredText);
     }
     
-    return "This document appears to be in a binary format or encrypted. Text extraction was unsuccessful.";
+    return "This document appears to be in a binary format. Text extraction was unsuccessful. Please try uploading a text-based PDF.";
   } catch (e) {
-    console.error("Error in PDF extraction:", e);
-    return "Error extracting text from PDF. The document may be scanned, encrypted or in an unsupported format.";
+    console.error("Error extracting PDF text:", e);
+    return "Error extracting text from PDF. The document may be encrypted, scanned (image-based), or in an unsupported format.";
   }
 }
 
-// Check if text is likely human-readable (not gibberish)
+// Improved DOCX text extraction
+function extractTextFromDOCX(buffer: ArrayBuffer): string {
+  try {
+    // DOCXs are ZIP archives with XML files inside
+    // Simple extraction looking for text content in XML
+    const textDecoder = new TextDecoder('utf-8');
+    const content = textDecoder.decode(buffer);
+    
+    // If we get readable content already, use it
+    if (isReadableText(content)) {
+      console.log("Successfully extracted readable text from DOCX with direct decoding");
+      return cleanupExtractedText(content);
+    }
+    
+    // Extract text content between XML tags that typically contain document text
+    console.log("Using XML pattern matching for DOCX text extraction");
+    const textNodes = [];
+    
+    // Match text in <w:t> tags (Word document text)
+    const paragraphRegex = /<w:t[^>]*>(.*?)<\/w:t>/g;
+    let match;
+    while ((match = paragraphRegex.exec(content)) !== null) {
+      if (match[1]) {
+        textNodes.push(match[1].trim());
+      }
+    }
+    
+    if (textNodes.length > 0) {
+      const extractedText = textNodes.join(' ');
+      console.log(`Extracted ${textNodes.length} text nodes from DOCX XML`);
+      return cleanupExtractedText(extractedText);
+    }
+    
+    // If we couldn't find <w:t> tags, try to find any readable text
+    console.log("Using general text pattern matching for DOCX");
+    const textMatches = [];
+    
+    // Look for anything that resembles readable text between tags
+    const generalTextRegex = />([A-Za-z0-9\s.,;:'"!?-]{10,})</g;
+    while ((match = generalTextRegex.exec(content)) !== null) {
+      if (match[1] && match[1].trim().length > 10) {
+        textMatches.push(match[1].trim());
+      }
+    }
+    
+    if (textMatches.length > 0) {
+      const extractedText = textMatches.join(' ');
+      console.log(`Extracted ${textMatches.length} general text fragments from DOCX`);
+      return cleanupExtractedText(extractedText);
+    }
+    
+    // Last resort: extract ASCII printable characters
+    console.log("Using ASCII filtering for DOCX extraction");
+    const bytes = new Uint8Array(buffer);
+    const asciiText = Array.from(bytes)
+      .filter(byte => byte >= 32 && byte <= 126) // ASCII printable range
+      .map(byte => String.fromCharCode(byte))
+      .join('');
+    
+    const filteredText = asciiText
+      .replace(/[^\x20-\x7E\n\r\t]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    if (filteredText.length > 200 && isReadableText(filteredText)) {
+      return cleanupExtractedText(filteredText);
+    }
+    
+    return "This Word document appears to be in a format that couldn't be processed. Please try saving it as plain text or PDF.";
+  } catch (e) {
+    console.error("Error extracting DOCX text:", e);
+    return "Error extracting text from Word document. The file may be corrupted or in an unsupported format.";
+  }
+}
+
+// Improved function to check if text is actually readable human language
 function isReadableText(text: string): boolean {
   if (!text || text.length < 20) return false;
   
   // Sample the text to check for readability
-  const sample = text.slice(0, 500);
+  const sample = text.slice(0, Math.min(500, text.length));
   
   // Check for reasonable character distribution
   const letterCount = (sample.match(/[a-zA-Z]/g) || []).length;
   const spaceCount = (sample.match(/\s/g) || []).length;
-  const digitCount = (sample.match(/\d/g) || []).length;
   const punctuationCount = (sample.match(/[.,;:'"!?-]/g) || []).length;
   const totalCount = sample.length;
   
@@ -118,96 +229,40 @@ function isReadableText(text: string): boolean {
   const letterRatio = letterCount / totalCount;
   // Text should have spaces between words
   const spaceRatio = spaceCount / totalCount;
-  // Text shouldn't be mostly special characters
-  const specialCharRatio = (totalCount - letterCount - spaceCount - digitCount - punctuationCount) / totalCount;
+  // Binary/gibberish data often has unusual distributions
+  const weirdCharCount = (sample.match(/[^\x20-\x7E\n\r\t]/g) || []).length;
+  const weirdCharRatio = weirdCharCount / totalCount;
   
-  // For readable text, we expect:
-  // - A significant portion to be letters (typically >30%)
+  // Check for binary data signatures or common patterns in corrupt files
+  const hasBinarySignatures = /^\%PDF|^PK\x03\x04|^\x50\x4B\x03\x04|^\x89PNG|^GIF8|^\xFF\xD8\xFF|^BM/.test(sample);
+  
+  // Check for sequences of random-looking characters
+  const hasRandomPatterns = /(\W{5,})/.test(sample) || /([^\s\w,.?!:;'"(){}\[\]]{4,})/.test(sample);
+
+  // For readability we typically expect:
+  // - A significant portion of letters (typically >30%)
   // - Some spaces between words (typically >5%)
-  // - Not too many special characters (typically <30%)
+  // - Not too many weird characters (typically <20%)
+  // - No binary file signatures
+  // - No long sequences of random symbols
   return (
     letterRatio > 0.3 && 
     spaceRatio > 0.05 && 
-    specialCharRatio < 0.3
+    weirdCharRatio < 0.2 &&
+    !hasBinarySignatures &&
+    !hasRandomPatterns
   );
 }
 
-// Clean up extracted text for better readability
+// Improved function to clean up extracted text
 function cleanupExtractedText(text: string): string {
   return text
     .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove control characters
-    .replace(/\s+/g, ' ')                 // Normalize whitespace
-    .replace(/\r\n|\r|\n/g, '\n')         // Normalize line breaks
-    .replace(/(\n\s*){3,}/g, '\n\n')      // Remove excessive line breaks
+    .replace(/�/g, '') // Remove replacement character
+    .replace(/[^\x20-\x7E\n\r\t\u00A0-\u00FF]/g, ' ') // Keep ASCII and some extended Latin
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/(\s*\n\s*){3,}/g, '\n\n') // Normalize excessive line breaks
     .trim();
-}
-
-// Extract text from Word documents
-function extractTextFromDOCX(buffer: ArrayBuffer): string {
-  try {
-    // Simple approach since we can't use libraries in Deno
-    const text = new TextDecoder().decode(buffer);
-    
-    // Check if it's readable as is (XML format)
-    if (isReadableText(text)) {
-      // Look for text content between XML tags that typically contain document text
-      const contentMatches = text.match(/<w:t[^>]*>(.*?)<\/w:t>/g) || [];
-      if (contentMatches.length > 0) {
-        const extractedText = contentMatches
-          .map(match => {
-            // Extract content between tags
-            const content = match.replace(/<w:t[^>]*>/, '').replace(/<\/w:t>/, '');
-            // Decode XML entities
-            return content
-              .replace(/&amp;/g, '&')
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/&quot;/g, '"')
-              .replace(/&apos;/g, "'");
-          })
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        
-        console.log(`Successfully extracted ${extractedText.length} characters from DOCX XML structure`);
-        return extractedText;
-      }
-    }
-    
-    // Fallback to extracting any text-like content
-    const wordMatches = text.match(/>[A-Za-z0-9\s.,;:'"!?-]{3,}</g) || [];
-    const potentialText = wordMatches
-      .map(match => match.slice(1, -1))
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-      
-    if (potentialText.length > 0 && isReadableText(potentialText)) {
-      console.log(`Extracted text of length ${potentialText.length} from DOCX using pattern matching`);
-      return potentialText;
-    }
-    
-    // ASCII extraction as last resort
-    const asciiText = Array.from(new Uint8Array(buffer))
-      .filter(byte => byte >= 32 && byte <= 126) // ASCII printable characters
-      .map(byte => String.fromCharCode(byte))
-      .join('');
-      
-    const cleanedAsciiText = asciiText
-      .replace(/[^\x20-\x7E\n\r\t]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-      
-    if (cleanedAsciiText.length > 200 && isReadableText(cleanedAsciiText)) {
-      console.log("Extracted DOCX text using ASCII filtering");
-      return cleanupExtractedText(cleanedAsciiText);
-    }
-    
-    return "This document appears to be a Word document but text extraction is limited on this platform.";
-  } catch (e) {
-    console.error('Error extracting text from DOCX:', e);
-    return "Error extracting text from Word document. The file may be corrupt or in an unsupported format.";
-  }
 }
 
 // Main handler function
@@ -259,14 +314,18 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Document already has content',
-          content_extracted: true 
+          message: 'Document already has readable content',
+          content_extracted: true,
+          content_sample: document.content.substring(0, 100) + '...'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    // If no content or unreadable content, try to extract it from the URL or storage
+    // If no content or unreadable content, try to extract it
+    console.log('Document needs content extraction');
+    
+    // Try to extract from URL first
     let fetchSuccess = false;
     if (document.url) {
       try {
@@ -310,14 +369,14 @@ serve(async (req) => {
             content = extractTextFromDOCX(buffer);
             console.log(`Extracted content from DOCX: ${content.length} characters`);
           } else {
-            console.log(`Unsupported document type for direct extraction: ${contentType}`);
+            console.log(`Trying generic text extraction for type: ${contentType}`);
             // Try to extract as plain text anyway
             const text = await response.text();
             if (isReadableText(text)) {
               content = cleanupExtractedText(text);
               console.log(`Treated as plain text, extracted ${content.length} characters`);
             } else {
-              content = `Document type (${contentType}) not supported for direct content extraction.`;
+              content = `Could not extract readable text from this document type (${contentType}). Please try converting it to PDF or TXT format.`;
             }
           }
         } else {
@@ -344,6 +403,8 @@ serve(async (req) => {
         if (fileError) {
           console.error('Error downloading file from storage:', fileError);
         } else if (fileData) {
+          console.log('Successfully downloaded file from storage, attempting content extraction');
+          
           const contentType = document.type || '';
           
           if (contentType.includes('text/plain') || 
@@ -371,28 +432,50 @@ serve(async (req) => {
           } else {
             // Try generic text extraction for other types
             try {
+              console.log('Attempting generic text extraction');
               const text = await fileData.text();
               if (isReadableText(text)) {
                 content = cleanupExtractedText(text);
-                console.log(`Treated as plain text from storage, extracted ${content.length} characters`);
+                console.log(`Extracted ${content.length} characters of readable text`);
               } else {
                 // Try binary extraction
+                console.log('Text not readable, attempting binary extraction');
                 const buffer = await fileData.arrayBuffer();
-                const asciiText = Array.from(new Uint8Array(buffer))
-                  .filter(byte => byte >= 32 && byte <= 126)
-                  .map(byte => String.fromCharCode(byte))
+                
+                // Attempt aggressive pattern-based extraction for common formats
+                const bytes = new Uint8Array(buffer);
+                const fileHeader = Array.from(bytes.slice(0, 8))
+                  .map(b => b.toString(16).padStart(2, '0'))
                   .join('');
-                  
-                const cleanedText = asciiText
-                  .replace(/[^\x20-\x7E\n\r\t]/g, '')
-                  .replace(/\s+/g, ' ')
-                  .trim();
-                  
-                if (cleanedText.length > 200 && isReadableText(cleanedText)) {
-                  content = cleanedText;
-                  console.log(`Extracted readable ASCII text from binary file: ${content.length} characters`);
+                
+                console.log(`File header: ${fileHeader}`);
+                
+                if (fileHeader.startsWith('255044462d')) {
+                  // PDF magic number detected
+                  content = extractTextFromPDF(buffer);
+                  console.log(`PDF detected by magic number, extracted ${content.length} characters`);
+                } else if (fileHeader.startsWith('504b0304')) {
+                  // ZIP/DOCX magic number detected
+                  content = extractTextFromDOCX(buffer);
+                  console.log(`ZIP/DOCX detected by magic number, extracted ${content.length} characters`);
                 } else {
-                  content = `Document type (${contentType}) not supported for storage content extraction.`;
+                  // Generic binary approach - try to extract ASCII text
+                  const asciiText = Array.from(bytes)
+                    .filter(byte => byte >= 32 && byte <= 126)
+                    .map(byte => String.fromCharCode(byte))
+                    .join('');
+                    
+                  const cleanedText = asciiText
+                    .replace(/[^\x20-\x7E\n\r\t]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                    
+                  if (cleanedText.length > 200 && isReadableText(cleanedText)) {
+                    content = cleanedText;
+                    console.log(`Extracted ${content.length} characters of readable ASCII text from binary file`);
+                  } else {
+                    content = `Could not extract readable text from this document. It may be in a binary format, encrypted, or a scanned image.`;
+                  }
                 }
               }
             } catch (textError) {
@@ -407,10 +490,11 @@ serve(async (req) => {
     }
     
     // Only update if we extracted content
-    if (content && (!document.content || !isReadableText(document.content))) {
+    if (content) {
       // Final check for readability
-      if (!isReadableText(content)) {
-        content = "The system was unable to extract readable text from this document. It may be a scanned image, encrypted, or in a format that's not supported for text extraction.";
+      if (!isReadableText(content) && content.length > 100) {
+        console.log('Extracted content is not readable, adding warning message');
+        content = "WARNING: The system had difficulty extracting readable text from this document. It may be scanned, encrypted, or in a format that's not fully supported. Below is the best extraction possible:\n\n" + content;
       }
       
       console.log(`Updating document ${documentId} with ${content.length} characters of content`);
@@ -444,10 +528,10 @@ serve(async (req) => {
       }
       
       console.log('Document content updated successfully');
-    } else if (!content) {
+    } else {
       console.log('No content could be extracted from the document');
       // Set a placeholder message when no content could be extracted
-      content = "The system was unable to extract any content from this document.";
+      content = "The system was unable to extract any readable content from this document. It may be encrypted, password-protected, or in an unsupported format. Please try uploading a different version or format of this document.";
       try {
         const { error: updateError } = await supabase
           .from('documents')
@@ -470,7 +554,8 @@ serve(async (req) => {
         content_extracted: content !== null,
         document_type: document.type,
         document_name: document.name,
-        readable_content: content ? isReadableText(content) : false
+        readable_content: content ? isReadableText(content) : false,
+        content_sample: content ? content.substring(0, 100) + '...' : null
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

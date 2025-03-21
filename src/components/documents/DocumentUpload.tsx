@@ -1,4 +1,3 @@
-
 import { useState, useRef } from 'react';
 import { FileUp, X, File, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -166,16 +165,28 @@ export function DocumentUpload({
           continue;
         }
         
-        // Process document with edge function (for text extraction, etc.)
-        if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
-          try {
-            await supabase.functions.invoke('process-document', {
-              body: { documentId }
-            });
-          } catch (processError) {
-            console.error('Error processing document:', processError);
-            // Continue even if processing fails
+        try {
+          // Always process document with edge function right after upload
+          const { data, error } = await supabase.functions.invoke('process-document', {
+            body: { documentId }
+          });
+            
+          if (error) {
+            console.error('Error processing document:', error);
+          } else {
+            console.log('Document processed successfully:', data);
+            // If content wasn't readable, try one more time
+            if (data && data.readable_content === false) {
+              console.log('Document content appears unreadable, trying one more time');
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit
+              await supabase.functions.invoke('process-document', {
+                body: { documentId, forceReprocess: true }
+              });
+            }
           }
+        } catch (processError) {
+          console.error('Error processing document:', processError);
+          // Continue even if processing fails
         }
         
         uploadedFiles.push(file);

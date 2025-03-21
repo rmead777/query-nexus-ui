@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -87,7 +86,6 @@ const Index = () => {
       
       console.log(`Fetched ${data?.length || 0} documents for user ${user.id}:`, data);
       
-      // Ensure all documents are selected by default
       setUserDocuments(data?.map(doc => ({...doc, selected: true})) || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
@@ -111,34 +109,33 @@ const Index = () => {
     let processedCount = 0;
     let needsReprocessingCount = 0;
     
-    // First check which documents need processing
     const documentsToProcess = [];
     
     for (const docId of documentIds) {
       try {
-        // Check if document has content and if it's readable
         const { data: docData, error: docError } = await supabase
           .from('documents')
           .select('content, document_id')
           .eq('document_id', docId)
           .single();
           
-        // Document needs processing if:
-        // 1. No content, or
-        // 2. Content is less than 100 chars, or
-        // 3. Content appears to be gibberish (like we see in the image)
+        const hasCorruptedContent = docData?.content && 
+          (docData.content.includes('�') || 
+           /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(docData.content) ||
+           docData.content.match(/[a-zA-Z]/g)?.length / docData.content.length < 0.2);
+        
         const needsProcessing = !docError && (
           !docData?.content || 
           docData.content.length < 100 ||
-          // Check for gibberish by looking for a high proportion of special characters or lack of spaces
+          hasCorruptedContent ||
           (docData.content.length > 0 && (
-            (docData.content.match(/[a-zA-Z]/g)?.length || 0) / docData.content.length < 0.3 ||
+            (docData.content.match(/[a-zA-Z]/g)?.length || 0) / docData.content.length < 0.2 ||
             (docData.content.match(/\s/g)?.length || 0) / docData.content.length < 0.05
           ))
         );
         
         if (needsProcessing) {
-          console.log(`Document ${docId} needs processing`);
+          console.log(`Document ${docId} needs processing${hasCorruptedContent ? ' (corrupted content detected)' : ''}`);
           documentsToProcess.push(docId);
           needsReprocessingCount++;
         } else {
@@ -146,7 +143,6 @@ const Index = () => {
         }
       } catch (error) {
         console.error(`Failed to check document ${docId}:`, error);
-        // When in doubt, process anyway
         documentsToProcess.push(docId);
         needsReprocessingCount++;
       }
@@ -160,11 +156,10 @@ const Index = () => {
       });
     }
     
-    // Process documents that need it
     for (const docId of documentsToProcess) {
       try {
         console.log(`Processing document ${docId}`);
-        const { error } = await supabase.functions.invoke('process-document', {
+        const { data, error } = await supabase.functions.invoke('process-document', {
           body: { documentId: docId }
         });
         
@@ -172,7 +167,20 @@ const Index = () => {
           console.error(`Error processing document ${docId}:`, error);
           hasError = true;
         } else {
+          console.log(`Document processing result:`, data);
           processedCount++;
+          
+          if (data && data.readable_content === false) {
+            console.log(`Document ${docId} content is still not readable, forcing reprocessing...`);
+            try {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              await supabase.functions.invoke('process-document', {
+                body: { documentId: docId, forceReprocess: true }
+              });
+            } catch (retryError) {
+              console.error(`Error in forced reprocessing for document ${docId}:`, retryError);
+            }
+          }
         }
       } catch (error) {
         console.error(`Failed to process document ${docId}:`, error);
@@ -263,7 +271,6 @@ const Index = () => {
         }
       }
       
-      // Get selected document IDs based on mode
       let documentIds: string[] = [];
       if (documentSourceMode === 'all') {
         documentIds = userDocuments.map(doc => doc.document_id);
@@ -273,7 +280,6 @@ const Index = () => {
           .map(doc => doc.document_id);
       }
       
-      // Pre-process documents to ensure content is available
       if (documentIds.length > 0) {
         await processUserDocuments(documentIds);
       }
@@ -292,7 +298,7 @@ const Index = () => {
           max_tokens: maxTokens,
           instructions: instructions,
           sources: sourcesSettings,
-          documentIds: documentIds, // Pass the document IDs
+          documentIds: documentIds,
           requestTemplate: requestTemplate,
           apiEndpoint: apiEndpoint,
           apiKey: apiKey,
@@ -345,14 +351,11 @@ const Index = () => {
       
       setMessages(prev => [...prev, assistantResponse]);
       
-      // Handle source data from response
       if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
         console.log("Setting sources from response:", data.sources);
         setSources(data.sources);
         setHasSourcesUsed(true);
       } else if (data.documentIdsUsed && data.documentIdsUsed.length > 0) {
-        // If we have document IDs but no sources in the response, try to fetch them
-        console.log("No source data in response, but document IDs used. Fetching documents...");
         const documentSources: Source[] = [];
         
         for (const docId of data.documentIdsUsed) {
@@ -369,7 +372,7 @@ const Index = () => {
                 title: docData.name,
                 content: docData.content,
                 documentName: docData.name,
-                relevanceScore: 85  // Default high score since it was used
+                relevanceScore: 85
               });
             }
           } catch (docError) {
@@ -398,7 +401,6 @@ const Index = () => {
         variant: "destructive"
       });
       
-      // Add a fallback error message
       const errorResponse: Message = {
         id: v4(),
         content: "I'm sorry, I encountered an error while processing your request. Please try again or check if your documents are properly uploaded.",
@@ -441,6 +443,23 @@ const Index = () => {
     setUserDocuments(prevDocs => 
       prevDocs.map(doc => ({ ...doc, selected: false }))
     );
+  };
+  
+  const reprocessAllDocuments = async () => {
+    if (!user || !userDocuments.length) return;
+    
+    toast({
+      title: "Reprocessing Documents",
+      description: "This will attempt to fix any documents with unreadable content.",
+    });
+    
+    const documentIds = userDocuments.map(doc => doc.document_id);
+    await processUserDocuments(documentIds);
+    
+    toast({
+      title: "Reprocessing Complete",
+      description: "All documents have been reprocessed.",
+    });
   };
   
   return (
@@ -544,7 +563,7 @@ const Index = () => {
                     )}
                     
                     {userDocuments.length > 0 && (
-                      <div className="mt-3 text-xs text-muted-foreground">
+                      <div className="mt-3 flex items-center justify-between">
                         <Button 
                           variant="link" 
                           size="sm" 
@@ -552,6 +571,15 @@ const Index = () => {
                           onClick={fetchUserDocuments}
                         >
                           Refresh document list
+                        </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={reprocessAllDocuments}
+                        >
+                          Fix Document Content
                         </Button>
                       </div>
                     )}
