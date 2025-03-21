@@ -8,7 +8,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from "@/components/ui/use-toast";
-import { v4 } from '@/lib/uuid';
 import { useNavigate } from 'react-router-dom';
 import { Settings, FileText, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,13 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-interface Message {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-  timestamp: Date;
-}
+import { useConversationStore, Message } from '@/hooks/use-conversation-store';
 
 interface Source {
   id: string;
@@ -49,7 +42,11 @@ interface UserDocument {
 }
 
 const Index = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { 
+    currentConversation, 
+    addMessage, 
+    startNewConversation 
+  } = useConversationStore();
   const [sources, setSources] = useState<Source[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
@@ -63,6 +60,13 @@ const Index = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  
+  // Initialize conversation if needed
+  useEffect(() => {
+    if (!currentConversation) {
+      startNewConversation();
+    }
+  }, [currentConversation, startNewConversation]);
   
   useEffect(() => {
     if (user) {
@@ -120,7 +124,7 @@ const Index = () => {
           .single();
           
         const hasCorruptedContent = docData?.content && 
-          (docData.content.includes('�') || 
+          (docData.content.includes('') || 
            /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(docData.content) ||
            docData.content.match(/[a-zA-Z]/g)?.length / docData.content.length < 0.2);
         
@@ -198,14 +202,12 @@ const Index = () => {
   };
   
   const handleSendMessage = async (message: string) => {
-    const newMessage: Message = {
-      id: v4(),
+    // Add user message to conversation state
+    addMessage({
       content: message,
-      role: 'user',
-      timestamp: new Date()
-    };
+      role: 'user'
+    });
     
-    setMessages(prev => [...prev, newMessage]);
     setIsLoading(true);
     setHasSourcesUsed(false);
     setSources([]); // Clear previous sources
@@ -342,14 +344,11 @@ const Index = () => {
                          "I'm sorry, I couldn't process your request at this time.";
       }
       
-      const assistantResponse: Message = {
-        id: v4(),
+      // Add assistant response to conversation state
+      addMessage({
         content: assistantContent,
-        role: 'assistant',
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, assistantResponse]);
+        role: 'assistant'
+      });
       
       if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
         console.log("Setting sources from response:", data.sources);
@@ -401,14 +400,11 @@ const Index = () => {
         variant: "destructive"
       });
       
-      const errorResponse: Message = {
-        id: v4(),
+      // Add error response to conversation state
+      addMessage({
         content: "I'm sorry, I encountered an error while processing your request. Please try again or check if your documents are properly uploaded.",
-        role: 'assistant',
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, errorResponse]);
+        role: 'assistant'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -597,7 +593,10 @@ const Index = () => {
                 )}
                 
                 <div className="flex-1 overflow-y-auto subtle-scroll pb-10">
-                  <ChatOutput messages={messages} isLoading={isLoading} />
+                  <ChatOutput 
+                    messages={currentConversation?.messages || []} 
+                    isLoading={isLoading} 
+                  />
                 </div>
               </div>
             </ResizablePanel>

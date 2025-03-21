@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { 
   Clock, 
   Download, 
@@ -15,8 +16,13 @@ import {
   Star, 
   StarOff, 
   Trash2,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
+import { useConversationStore } from '@/hooks/use-conversation-store';
 
 interface ConversationItem {
   id: string;
@@ -28,35 +34,59 @@ interface ConversationItem {
 }
 
 const Conversations = () => {
-  const [conversations, setConversations] = useState<ConversationItem[]>([
-    {
-      id: '1',
-      title: 'Document Analysis: Marketing Strategy',
-      preview: 'I need to analyze our Q3 marketing strategy document to extract key performance indicators and budget allocations.',
-      messageCount: 12,
-      createdAt: new Date('2023-09-15T14:23:00'),
-      isFavorite: true
-    },
-    {
-      id: '2',
-      title: 'Technical Documentation Review',
-      preview: 'Can you help me review this API documentation for clarity, completeness, and technical accuracy?',
-      messageCount: 8,
-      createdAt: new Date('2023-09-10T09:45:00'),
-      isFavorite: false
-    },
-    {
-      id: '3',
-      title: 'Research Paper Analysis',
-      preview: 'I need help understanding the key findings and methodology of this research paper on large language models.',
-      messageCount: 15,
-      createdAt: new Date('2023-09-05T16:30:00'),
-      isFavorite: true
-    }
-  ]);
-  
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { loadConversation } = useConversationStore();
+  
+  useEffect(() => {
+    if (user) {
+      fetchConversations();
+    }
+  }, [user]);
+  
+  const fetchConversations = async () => {
+    if (!user) return;
+    
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      const formattedConversations: ConversationItem[] = (data || []).map(conv => {
+        const messages = conv.messages || [];
+        const firstUserMessage = messages.find((m: any) => m.role === 'user');
+        
+        return {
+          id: conv.conversation_id,
+          title: conv.title || 'Untitled Conversation',
+          preview: firstUserMessage ? firstUserMessage.content : 'No content available',
+          messageCount: messages.length,
+          createdAt: new Date(conv.created_at),
+          isFavorite: conv.is_favorite || false
+        };
+      });
+      
+      setConversations(formattedConversations);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load your conversations.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const filteredConversations = searchQuery
     ? conversations.filter(conversation => 
@@ -65,28 +95,84 @@ const Conversations = () => {
       )
     : conversations;
   
-  const handleDelete = (id: string) => {
-    const conversationTitle = conversations.find(c => c.id === id)?.title;
-    setConversations(conversations.filter(conversation => conversation.id !== id));
-    
-    toast({
-      title: "Conversation Deleted",
-      description: `The conversation "${conversationTitle}" has been deleted.`,
-    });
+  const handleDelete = async (id: string) => {
+    try {
+      const conversationTitle = conversations.find(c => c.id === id)?.title;
+      
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('conversation_id', id)
+        .eq('user_id', user?.id);
+        
+      if (error) throw error;
+      
+      setConversations(conversations.filter(conversation => conversation.id !== id));
+      
+      toast({
+        title: "Conversation Deleted",
+        description: `The conversation "${conversationTitle}" has been deleted.`,
+      });
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete the conversation.",
+        variant: "destructive"
+      });
+    }
   };
   
-  const handleToggleFavorite = (id: string) => {
-    setConversations(conversations.map(conversation => 
-      conversation.id === id 
-        ? { ...conversation, isFavorite: !conversation.isFavorite } 
-        : conversation
-    ));
-    
-    const conversation = conversations.find(c => c.id === id);
-    if (conversation) {
+  const handleToggleFavorite = async (id: string) => {
+    try {
+      const conversation = conversations.find(c => c.id === id);
+      if (!conversation) return;
+      
+      const newFavoriteStatus = !conversation.isFavorite;
+      
+      const { error } = await supabase
+        .from('conversations')
+        .update({ is_favorite: newFavoriteStatus })
+        .eq('conversation_id', id)
+        .eq('user_id', user?.id);
+        
+      if (error) throw error;
+      
+      setConversations(conversations.map(conv => 
+        conv.id === id 
+          ? { ...conv, isFavorite: newFavoriteStatus } 
+          : conv
+      ));
+      
       toast({
-        title: conversation.isFavorite ? "Removed from Favorites" : "Added to Favorites",
-        description: `"${conversation.title}" has been ${conversation.isFavorite ? 'removed from' : 'added to'} your favorites.`,
+        title: newFavoriteStatus ? "Added to Favorites" : "Removed from Favorites",
+        description: `"${conversation.title}" has been ${newFavoriteStatus ? 'added to' : 'removed from'} your favorites.`,
+      });
+    } catch (error) {
+      console.error('Error updating favorite status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update favorite status.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const handleViewConversation = async (id: string) => {
+    try {
+      const success = await loadConversation(id);
+      if (success) {
+        navigate('/');
+        toast('Conversation loaded', {
+          duration: 3000
+        });
+      } else {
+        throw new Error('Failed to load conversation');
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      toast('Failed to load conversation', {
+        duration: 3000
       });
     }
   };
@@ -121,6 +207,10 @@ const Conversations = () => {
               Access and manage your previous conversations.
             </p>
           </div>
+          
+          <Button onClick={fetchConversations} variant="outline" size="sm">
+            Refresh
+          </Button>
         </div>
         
         <div className="relative mb-6">
@@ -144,7 +234,11 @@ const Conversations = () => {
           )}
         </div>
         
-        {filteredConversations.length > 0 ? (
+        {isLoading ? (
+          <div className="flex justify-center items-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredConversations.length > 0 ? (
           <div className="space-y-4">
             {filteredConversations.map((conversation) => (
               <Card 
@@ -208,8 +302,12 @@ const Conversations = () => {
                   </div>
                   
                   <div className="flex gap-1">
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={`#conversation-${conversation.id}`}>View</a>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewConversation(conversation.id)}
+                    >
+                      View
                     </Button>
                     <Button variant="secondary" size="sm" className="gap-1">
                       <Download className="h-3.5 w-3.5" />
@@ -232,7 +330,7 @@ const Conversations = () => {
               </p>
             ) : (
               <p className="text-muted-foreground max-w-md mx-auto">
-                You haven't saved any conversations yet. Start a new chat to create your first conversation.
+                You haven't saved any conversations yet. Start a new chat and enable auto-save to store your conversations.
               </p>
             )}
             

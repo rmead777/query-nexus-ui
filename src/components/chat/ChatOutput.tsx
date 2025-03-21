@@ -3,13 +3,7 @@ import { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-
-interface Message {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-  timestamp: Date;
-}
+import { Message } from '@/hooks/use-conversation-store';
 
 interface ChatOutputProps {
   messages: Message[];
