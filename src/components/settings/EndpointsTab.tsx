@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ApiEndpoint } from '@/types/api';
 import { Eye, EyeOff, Plus, Trash2, Edit, Check, HelpCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useSettingsContext } from '@/contexts/SettingsContext';
 
 interface EndpointsTabProps {
   apiEndpoints: ApiEndpoint[];
@@ -41,8 +43,10 @@ export const EndpointsTab = ({
   showNewApiKey,
   setShowNewApiKey
 }: EndpointsTabProps) => {
+  const { setNewEndpoint } = useSettingsContext();
+  
   const updateNewEndpoint = (changes: Partial<ApiEndpoint>) => {
-    console.log("Update endpoint requested:", changes);
+    setNewEndpoint(prev => ({ ...prev, ...changes }));
   };
 
   return (
@@ -83,7 +87,7 @@ export const EndpointsTab = ({
                   <Input
                     id="endpoint-name"
                     value={newEndpoint.name}
-                    onChange={(e) => setNewEndpoint({...newEndpoint, name: e.target.value})}
+                    onChange={(e) => updateNewEndpoint({ name: e.target.value })}
                     placeholder="Personal OpenAI Account"
                   />
                 </div>
@@ -92,7 +96,7 @@ export const EndpointsTab = ({
                   <Label htmlFor="endpoint-provider">Provider</Label>
                   <Select 
                     value={newEndpoint.provider} 
-                    onValueChange={(value) => setNewEndpoint({...newEndpoint, provider: value})}
+                    onValueChange={(value) => updateNewEndpoint({ provider: value })}
                   >
                     <SelectTrigger id="endpoint-provider">
                       <SelectValue placeholder="Select a provider" />
@@ -112,7 +116,7 @@ export const EndpointsTab = ({
                   <Input
                     id="endpoint-url"
                     value={newEndpoint.api_endpoint || ''}
-                    onChange={(e) => setNewEndpoint({...newEndpoint, api_endpoint: e.target.value})}
+                    onChange={(e) => updateNewEndpoint({ api_endpoint: e.target.value })}
                     placeholder="https://api.openai.com/v1"
                   />
                 </div>
@@ -122,7 +126,7 @@ export const EndpointsTab = ({
                   <Input
                     id="endpoint-model"
                     value={newEndpoint.model || ''}
-                    onChange={(e) => setNewEndpoint({...newEndpoint, model: e.target.value})}
+                    onChange={(e) => updateNewEndpoint({ model: e.target.value })}
                     placeholder="gpt-4o"
                   />
                 </div>
@@ -134,7 +138,7 @@ export const EndpointsTab = ({
                       id="endpoint-api-key"
                       type={showNewApiKey ? "text" : "password"}
                       value={newEndpoint.api_key || ''}
-                      onChange={(e) => setNewEndpoint({...newEndpoint, api_key: e.target.value})}
+                      onChange={(e) => updateNewEndpoint({ api_key: e.target.value })}
                       placeholder="Your API key"
                       className="pr-10"
                     />
