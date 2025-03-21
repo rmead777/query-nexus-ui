@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -52,18 +51,16 @@ export const AzureTab = ({
   showSearchKey,
   setShowSearchKey
 }: AzureTabProps) => {
-  const handleSaveSettings = (type: string) => {
-    if (type === 'azure') {
-      onSave({
-        useAzure: useAzure,
-        azureApiKey: azureSettings.apiKey,
-        azureEndpointUrl: azureSettings.endpointUrl,
-        azureDeploymentName: azureSettings.deploymentName,
-        azureSearchEndpoint: azureSettings.searchEndpoint,
-        azureSearchKey: azureSettings.searchKey,
-        azureSearchIndexName: azureSettings.searchIndexName
-      });
-    }
+  const handleSaveSettings = () => {
+    onSave({
+      useAzure: useAzure,
+      azureApiKey: azureSettings.apiKey,
+      azureEndpointUrl: azureSettings.endpointUrl,
+      azureDeploymentName: azureSettings.deploymentName,
+      azureSearchEndpoint: azureSettings.searchEndpoint,
+      azureSearchKey: azureSettings.searchKey,
+      azureSearchIndexName: azureSettings.searchIndexName
+    });
   };
 
   return (
@@ -269,7 +266,7 @@ export const AzureTab = ({
         </CardContent>
         <CardFooter>
           <Button 
-            onClick={() => handleSaveSettings('azure')}
+            onClick={handleSaveSettings}
             className="ml-auto"
             disabled={saving}
           >
