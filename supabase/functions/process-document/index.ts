@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -6,16 +7,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Helper function to extract meaningful content from HTML
+// Enhanced function to extract meaningful content from HTML
 function extractTextFromHTML(html: string): string {
   // Remove script and style tags and their content
   let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ');
   text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
   
-  // Remove HTML tags
-  text = text.replace(/<\/?[^>]+(>|$)/g, ' ');
+  // Remove HTML comments
+  text = text.replace(/<!--[\s\S]*?-->/g, ' ');
   
-  // Replace multiple spaces with a single space
+  // Remove HTML tags but preserve headings with more weight
+  text = text.replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, (match, content) => {
+    return content + ' ' + content + ' '; // Duplicate heading content for more weight
+  });
+  
+  // Handle other tags
+  text = text.replace(/<\/?(p|div|section|article)[^>]*>/gi, '\n'); // Add newlines for block elements
+  text = text.replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n'); // Preserve list items
+  text = text.replace(/<\/?(strong|b|em|i|u|span)[^>]*>/gi, ''); // Remove inline formatting tags
+  text = text.replace(/<[^>]+>/g, ' '); // Remove all other tags
+  
+  // Clean up whitespace
   text = text.replace(/\s+/g, ' ');
   
   // Decode HTML entities
@@ -24,57 +36,233 @@ function extractTextFromHTML(html: string): string {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
+    .replace(/&hellip;/g, "...");
   
   return text.trim();
 }
 
-// Simple parser for extracting text from PDFs
+// Improved parser for extracting text from PDFs
 function extractTextFromPDF(buffer: ArrayBuffer): string {
-  // This is a simplified approach - in a real application, you would use a dedicated PDF parsing library
-  // Convert buffer to string and look for text content
-  const text = new TextDecoder().decode(buffer);
+  const textDecoder = new TextDecoder();
+  const text = textDecoder.decode(buffer);
   
-  // Look for text blocks in the PDF string representation
-  // This is not a complete solution but can extract some plain text
-  let extractedText = '';
+  // Extract PDF structure
+  const extractedText: string[] = [];
   
-  // Find text blocks between BT and ET markers
-  const textMatches = text.match(/BT([\s\S]*?)ET/g);
-  if (textMatches) {
-    for (const match of textMatches) {
-      // Extract text strings (usually between parentheses or angle brackets)
-      const stringMatches = match.match(/\((.*?)\)|\<(.*?)\>/g);
-      if (stringMatches) {
-        for (const stringMatch of stringMatches) {
-          // Clean up the extracted text
-          let cleanText = stringMatch.replace(/^\(|\)$|^\<|\>$/g, '');
-          // Convert hex encoded text
-          if (stringMatch.startsWith('<') && stringMatch.endsWith('>')) {
-            try {
-              // Convert hex pairs to characters
-              const hexPairs = cleanText.match(/.{1,2}/g) || [];
-              cleanText = hexPairs.map(hex => String.fromCharCode(parseInt(hex, 16))).join('');
-            } catch (e) {
-              // If conversion fails, keep the original
-            }
+  // Find text objects
+  const textObjects = text.match(/BT[\s\S]*?ET/g) || [];
+  
+  for (const textObject of textObjects) {
+    // Extract text strings (between parentheses or with hex encoding)
+    const stringMatches = textObject.match(/\((.*?)\)|<([0-9A-Fa-f]+)>/g) || [];
+    
+    for (const stringMatch of stringMatches) {
+      if (stringMatch.startsWith('(') && stringMatch.endsWith(')')) {
+        // Handle escaped parentheses and other characters
+        let content = stringMatch.slice(1, -1)
+          .replace(/\\\(/g, '(')
+          .replace(/\\\)/g, ')')
+          .replace(/\\\\/g, '\\');
+        
+        // Remove control characters
+        content = content.replace(/[\x00-\x1F\x7F]/g, '');
+        
+        if (content.trim().length > 0) {
+          extractedText.push(content);
+        }
+      } else if (stringMatch.startsWith('<') && stringMatch.endsWith('>')) {
+        // Hex encoded text
+        try {
+          const hexContent = stringMatch.slice(1, -1);
+          // Convert pairs of hex digits to characters
+          const hexPairs = hexContent.match(/.{1,2}/g) || [];
+          const decodedText = hexPairs
+            .map(hex => String.fromCharCode(parseInt(hex, 16)))
+            .join('')
+            .replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
+          
+          if (decodedText.trim().length > 0) {
+            extractedText.push(decodedText);
           }
-          extractedText += cleanText + ' ';
+        } catch (e) {
+          // Skip if there's an error in conversion
         }
       }
     }
   }
   
-  // If we couldn't extract text with the above method, try a simpler approach
-  if (extractedText.trim().length < 100) {
-    // Look for any text that might be between parentheses
-    const simpleMatches = text.match(/\((.*?)\)/g);
-    if (simpleMatches) {
-      extractedText = simpleMatches.map(m => m.slice(1, -1)).join(' ');
+  // If standard extraction yields insufficient results, try fallback approaches
+  if (extractedText.join(' ').length < 200) {
+    // Look for text in content streams
+    const streamMatches = text.match(/stream\s([\s\S]*?)\sendstream/g) || [];
+    for (const stream of streamMatches) {
+      const cleanStream = stream
+        .replace(/stream\s/, '')
+        .replace(/\sendstream/, '')
+        .replace(/[\x00-\x1F\x7F]/g, ' ');
+      
+      // Extract text that looks like words (3+ characters)
+      const potentialWords = cleanStream.match(/[A-Za-z]{3,}/g) || [];
+      if (potentialWords.length > 0) {
+        extractedText.push(potentialWords.join(' '));
+      }
+    }
+    
+    // Simple text extraction as last resort
+    const simpleMatches = text.match(/\(\s*([A-Za-z0-9\s.,;:'"!?-]{3,})\s*\)/g) || [];
+    for (const match of simpleMatches) {
+      const content = match.slice(1, -1).trim();
+      if (content.length > 0) {
+        extractedText.push(content);
+      }
     }
   }
   
-  return extractedText.trim();
+  // Join all extracted text fragments
+  let result = extractedText.join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  if (result.length < 100) {
+    // If extraction still yields minimal results, include a note
+    result += "\n\nNote: This PDF appears to be mostly image-based or contains minimal extractable text.";
+  }
+  
+  return result;
+}
+
+// Extract text from Word documents
+function extractTextFromDOCX(buffer: ArrayBuffer): string {
+  try {
+    // This is a simplified approach since we can't use libraries like mammoth.js in Deno
+    const text = new TextDecoder().decode(buffer);
+    
+    // Look for text content between XML tags that typically contain document text
+    const contentMatches = text.match(/<w:t[^>]*>(.*?)<\/w:t>/g) || [];
+    const extractedText = contentMatches
+      .map(match => {
+        // Extract content between tags
+        const content = match.replace(/<w:t[^>]*>/, '').replace(/<\/w:t>/, '');
+        // Decode XML entities
+        return content
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'");
+      })
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    if (extractedText.length > 0) {
+      return extractedText;
+    } else {
+      // Fallback to looking for any text-like content
+      const wordMatches = text.match(/>[A-Za-z0-9\s.,;:'"!?-]{3,}</g) || [];
+      if (wordMatches.length > 0) {
+        return wordMatches
+          .map(match => match.slice(1, -1))
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+    }
+    
+    return "This document appears to be a Word document but text extraction is limited.";
+  } catch (e) {
+    console.error('Error extracting text from DOCX:', e);
+    return "Document type (DOCX) encountered an error during content extraction.";
+  }
+}
+
+// New function to normalize text for better comparison
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '') // Remove punctuation
+    .replace(/\s+/g, ' ')    // Normalize whitespace
+    .trim();
+}
+
+// More sophisticated semantic similarity calculation
+function calculateTextSimilarity(query: string, documentText: string): number {
+  if (!query || !documentText) return 0;
+  
+  // Normalize texts
+  const normalizedQuery = normalizeText(query);
+  const normalizedDoc = normalizeText(documentText);
+  
+  // Extract unique keywords (words longer than 3 characters)
+  const queryWords = normalizedQuery.split(/\s+/).filter(word => word.length > 3);
+  const uniqueQueryWords = Array.from(new Set(queryWords));
+  
+  // Skip calculation if query is too short
+  if (uniqueQueryWords.length === 0) return 60; // Default score
+  
+  // Calculate exact matches
+  let exactMatchCount = 0;
+  for (const word of uniqueQueryWords) {
+    if (normalizedDoc.includes(word)) {
+      exactMatchCount++;
+    }
+  }
+  
+  // Calculate partial matches (words that are part of document words)
+  let partialMatchCount = 0;
+  for (const word of uniqueQueryWords) {
+    if (word.length > 4) { // Only consider substantial words
+      const docWords = normalizedDoc.split(/\s+/);
+      for (const docWord of docWords) {
+        if (docWord.includes(word) || word.includes(docWord)) {
+          partialMatchCount += 0.5; // Half weight for partial matches
+          break; // Count each query word only once
+        }
+      }
+    }
+  }
+  
+  // Check for phrase matches (higher weight)
+  let phraseBonus = 0;
+  if (queryWords.length > 1) {
+    // Look for sequences of 2-3 words from the query
+    for (let i = 0; i < queryWords.length - 1; i++) {
+      const twoWordPhrase = queryWords.slice(i, i + 2).join(' ');
+      if (normalizedDoc.includes(twoWordPhrase)) {
+        phraseBonus += 10; // Significant bonus for phrase matches
+      }
+      
+      if (i < queryWords.length - 2) {
+        const threeWordPhrase = queryWords.slice(i, i + 3).join(' ');
+        if (normalizedDoc.includes(threeWordPhrase)) {
+          phraseBonus += 20; // Higher bonus for longer phrase matches
+        }
+      }
+    }
+  }
+  
+  // Calculate the TF-IDF-like relevance score
+  const baseScore = ((exactMatchCount + partialMatchCount) / uniqueQueryWords.length) * 100;
+  
+  // Adjust score based on document length and context
+  const contextAdjustment = Math.min(20, Math.log(documentText.length / 100));
+  const finalScore = Math.min(98, Math.max(60, baseScore + phraseBonus + contextAdjustment));
+  
+  return Math.round(finalScore);
+}
+
+// Analyze document content structure to identify sections
+function analyzeDocumentStructure(content: string) {
+  // This function could detect headings, paragraphs, and sections for better context extraction
+  // For now we'll return a simple structure
+  return {
+    hasStructure: content.includes('\n\n'),
+    sections: content.split('\n\n').filter(s => s.trim().length > 0),
+    potentialHeadings: content.match(/[A-Z][A-Za-z0-9\s]{2,30}:(?:\s|$)/g) || []
+  };
 }
 
 serve(async (req) => {
@@ -173,10 +361,12 @@ serve(async (req) => {
             const text = await response.text();
             content = text;
             console.log(`Successfully extracted ${content.length} characters from CSV`);
-          } else if (document.name.endsWith('.docx') || contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
-            // Word documents - limited extraction
-            content = "This document is a Word document (.docx) which requires specialized parsing.";
-            console.log("Word document detected, extraction limited");
+          } else if (document.name.endsWith('.docx') || 
+                    contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+            // Word documents
+            const buffer = await response.arrayBuffer();
+            content = extractTextFromDOCX(buffer);
+            console.log(`Extracted content from DOCX: ${content.length} characters`);
           } else {
             console.log(`Unsupported document type for direct extraction: ${contentType}`);
             content = `Document type (${contentType}) not supported for direct content extraction.`;
@@ -228,6 +418,12 @@ serve(async (req) => {
               console.log("PDF appears to be image-based or has limited extractable text");
               content += "\n\nNote: This document appears to be image-based or has limited extractable text.";
             }
+          } else if (document.name.endsWith('.docx') || 
+                    contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+            // Word documents
+            const buffer = await fileData.arrayBuffer();
+            content = extractTextFromDOCX(buffer);
+            console.log(`Extracted content from DOCX in storage: ${content.length} characters`);
           } else {
             console.log(`Unsupported document type for storage extraction: ${contentType}`);
             content = `Document type (${contentType}) not supported for storage content extraction.`;
@@ -242,21 +438,56 @@ serve(async (req) => {
     if (content) {
       console.log(`Updating document ${documentId} with ${content.length} characters of content`);
       
-      // Update the document with the extracted content
-      const { error: updateError } = await supabase
-        .from('documents')
-        .update({ content })
-        .eq('document_id', documentId);
+      try {
+        // Create document metadata
+        const structure = analyzeDocumentStructure(content);
+        const metadata = {
+          word_count: content.split(/\s+/).length,
+          has_structure: structure.hasStructure,
+          potential_sections: structure.sections.length,
+          processed_at: new Date().toISOString()
+        };
+        
+        // Update the document with the extracted content and metadata
+        const { error: updateError } = await supabase
+          .from('documents')
+          .update({ 
+            content,
+            metadata
+          })
+          .eq('document_id', documentId);
 
-      if (updateError) {
-        console.error('Error updating document content:', updateError);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to update document content', 
-            details: updateError 
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
+        if (updateError) {
+          console.error('Error updating document content:', updateError);
+          return new Response(
+            JSON.stringify({ 
+              error: 'Failed to update document content', 
+              details: updateError 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          );
+        }
+      } catch (updateError) {
+        console.error('Error updating document:', updateError);
+        // If error is related to metadata JSON structure, try updating just the content
+        try {
+          const { error: contentUpdateError } = await supabase
+            .from('documents')
+            .update({ content })
+            .eq('document_id', documentId);
+            
+          if (contentUpdateError) {
+            throw contentUpdateError;
+          }
+        } catch (fallbackError) {
+          return new Response(
+            JSON.stringify({ 
+              error: 'Failed to update document', 
+              details: fallbackError 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          );
+        }
       }
       
       console.log('Document content updated successfully');

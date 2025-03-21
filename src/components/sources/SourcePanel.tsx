@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Search, ExternalLink, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, ExternalLink, X, ChevronUp, ChevronDown, Info } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -9,6 +9,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface Source {
@@ -18,6 +20,8 @@ interface Source {
   content: string;
   documentName?: string;
   relevanceScore: number; // 0-100
+  relevanceCategory?: string; // "High", "Medium", "Low"
+  wordCount?: number;
 }
 
 interface SourcePanelProps {
@@ -90,6 +94,26 @@ export function SourcePanel({ sources }: SourcePanelProps) {
 function SourceItem({ source }: { source: Source }) {
   const [isOpen, setIsOpen] = useState(false);
   
+  // Determine relevance color based on score or category
+  const getRelevanceColor = (score: number, category?: string) => {
+    if (category === "High" || score >= 90) return "bg-green-500";
+    if (category === "Medium" || score >= 75) return "bg-yellow-500";
+    if (category === "Low" || score >= 60) return "bg-orange-400";
+    return "bg-red-400";
+  };
+
+  // Determine badge color for relevance category
+  const getBadgeVariant = (category?: string) => {
+    if (!category) return "outline";
+    
+    switch(category) {
+      case "High": return "success";
+      case "Medium": return "warning";
+      case "Low": return "secondary";
+      default: return "outline";
+    }
+  };
+  
   return (
     <div className="animate-fade-in">
       <Collapsible
@@ -133,7 +157,24 @@ function SourceItem({ source }: { source: Source }) {
             </div>
           </div>
           
-          <div className="mt-1.5 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant={getBadgeVariant(source.relevanceCategory)}>
+                      {source.relevanceCategory || getRelevanceCategoryFromScore(source.relevanceScore)}
+                    </Badge>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>Relevance score: {source.relevanceScore}%</p>
+                  {source.wordCount && <p>Word count: {source.wordCount}</p>}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
             <div 
               className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden"
               title={`Relevance: ${source.relevanceScore}%`}
@@ -141,16 +182,11 @@ function SourceItem({ source }: { source: Source }) {
               <div 
                 className={cn(
                   "h-full rounded-full",
-                  source.relevanceScore > 80 ? "bg-green-500" :
-                  source.relevanceScore > 50 ? "bg-yellow-500" :
-                  "bg-red-500"
+                  getRelevanceColor(source.relevanceScore, source.relevanceCategory)
                 )}
                 style={{ width: `${source.relevanceScore}%` }}
               />
             </div>
-            <span className="text-xs font-medium">
-              {source.relevanceScore}%
-            </span>
           </div>
         </div>
         
@@ -164,4 +200,12 @@ function SourceItem({ source }: { source: Source }) {
       </Collapsible>
     </div>
   );
+}
+
+// Helper function to get relevance category from score for backward compatibility
+function getRelevanceCategoryFromScore(score: number): string {
+  if (score >= 90) return "High";
+  if (score >= 75) return "Medium";
+  if (score >= 60) return "Low";
+  return "Very Low";
 }

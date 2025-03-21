@@ -28,33 +28,145 @@ function formatTemplate(template: any, values: Record<string, any>): any {
   return template;
 }
 
-// Calculate semantic similarity between two texts (simple version)
-function calculateTextSimilarity(text1: string, text2: string): number {
-  if (!text1 || !text2) return 0;
+// Function to normalize text for better comparison
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '') // Remove punctuation
+    .replace(/\s+/g, ' ')    // Normalize whitespace
+    .trim();
+}
+
+// Enhanced semantic similarity between two texts
+function calculateTextSimilarity(query: string, documentText: string): number {
+  if (!query || !documentText) return 60; // Default base score
   
-  // Convert to lowercase for better matching
-  const text1Lower = text1.toLowerCase();
-  const text2Lower = text2.toLowerCase();
+  // Normalize texts
+  const normalizedQuery = normalizeText(query);
+  const normalizedDoc = normalizeText(documentText);
   
-  // Extract keywords (words longer than 3 characters)
-  const text1Words = text1Lower.split(/\s+/).filter(word => word.length > 3);
-  const text2Words = text2Lower.split(/\s+/).filter(word => word.length > 3);
+  // Extract unique keywords (words longer than 3 characters)
+  const queryWords = normalizedQuery.split(/\s+/).filter(word => word.length > 3);
+  const uniqueQueryWords = Array.from(new Set(queryWords));
   
-  // Count matching words
-  let matchCount = 0;
-  let totalWords = text1Words.length;
+  // Skip calculation if query is too short
+  if (uniqueQueryWords.length === 0) return 60; // Default score
   
-  for (const word of text1Words) {
-    if (text2Words.includes(word)) {
-      matchCount++;
+  // Document words (for term frequency)
+  const docWords = normalizedDoc.split(/\s+/).filter(word => word.length > 3);
+  const docWordSet = new Set(docWords);
+  
+  // Term Frequency calculation
+  const termFrequencies: Record<string, number> = {};
+  docWords.forEach(word => {
+    termFrequencies[word] = (termFrequencies[word] || 0) + 1;
+  });
+  
+  // Calculate exact matches with term frequency weighting
+  let weightedMatchScore = 0;
+  let exactMatchCount = 0;
+  
+  for (const word of uniqueQueryWords) {
+    if (docWordSet.has(word)) {
+      exactMatchCount++;
+      // Weight by term frequency 
+      const frequency = termFrequencies[word] || 0;
+      // Log scale to dampen impact of very frequent terms
+      const frequencyWeight = frequency > 0 ? 1 + Math.log(frequency) : 0;
+      weightedMatchScore += frequencyWeight;
     }
   }
   
-  // Prevent division by zero
-  if (totalWords === 0) return 0;
+  // Check for phrase matches (higher weight)
+  let phraseBonus = 0;
+  if (queryWords.length > 1) {
+    // Look for sequences of 2-3 words from the query
+    for (let i = 0; i < queryWords.length - 1; i++) {
+      const twoWordPhrase = queryWords.slice(i, i + 2).join(' ');
+      if (normalizedDoc.includes(twoWordPhrase)) {
+        phraseBonus += 5; // Significant bonus for phrase matches
+      }
+      
+      if (i < queryWords.length - 2) {
+        const threeWordPhrase = queryWords.slice(i, i + 3).join(' ');
+        if (normalizedDoc.includes(threeWordPhrase)) {
+          phraseBonus += 10; // Higher bonus for longer phrase matches
+        }
+      }
+    }
+  }
   
-  // Calculate a similarity score (0-100)
-  return Math.min(100, Math.round((matchCount / totalWords) * 100));
+  // Position weight - check if matches appear early in document (title/intro importance)
+  const earlyContextBonus = docWords.length > 50 ? 
+    normalizedDoc.substring(0, Math.min(500, normalizedDoc.length / 3))
+      .split(/\s+/)
+      .filter(word => uniqueQueryWords.includes(word)).length * 2 : 0;
+  
+  // Document length factor - longer documents get a slight penalty to favor concise matches
+  const lengthPenalty = Math.max(0, Math.min(5, Math.log(docWords.length / 300)));
+  
+  // Base score calculation
+  let matchRatio = uniqueQueryWords.length > 0 ? 
+    exactMatchCount / uniqueQueryWords.length : 0;
+  
+  // Adjust with weighted components
+  const baseScore = matchRatio * 100;
+  const frequencyBonus = weightedMatchScore * 2;
+  const documentScore = Math.min(98, Math.max(60, 
+    baseScore + frequencyBonus + phraseBonus + earlyContextBonus - lengthPenalty
+  ));
+  
+  // Add slight randomization for better visualization when scores are close
+  const randomAdjustment = Math.floor(Math.random() * 3) - 1;
+  return Math.min(98, Math.max(60, Math.round(documentScore + randomAdjustment)));
+}
+
+// Extract most relevant passages from a document based on query
+function extractRelevantPassages(query: string, documentContent: string, maxPassages = 3): string {
+  if (!documentContent || documentContent.length < 100) return documentContent;
+  
+  const normalizedQuery = normalizeText(query);
+  const queryWords = normalizedQuery.split(/\s+/).filter(word => word.length > 3);
+  
+  // Split document into passages (paragraphs or chunks)
+  const passages = documentContent
+    .split(/\n\n+/) // Split by paragraph breaks
+    .filter(p => p.trim().length > 20); // Ignore very short passages
+  
+  if (passages.length <= maxPassages) return documentContent;
+  
+  // Score each passage based on query relevance
+  const scoredPassages = passages.map(passage => {
+    const normalizedPassage = normalizeText(passage);
+    
+    // Keyword matching score
+    let keywordMatches = 0;
+    queryWords.forEach(word => {
+      if (normalizedPassage.includes(word)) keywordMatches++;
+    });
+    
+    // Prioritize passages with multiple keyword hits
+    const score = keywordMatches / queryWords.length * 
+                 (1 + Math.min(0.5, passage.length / 1000)); // Slight bonus for length (capped)
+    
+    return { passage, score };
+  });
+  
+  // Sort by score and take top passages
+  const topPassages = scoredPassages
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxPassages)
+    .map(p => p.passage);
+  
+  return topPassages.join('\n\n');
+}
+
+// Creates a labeled relevance category for a score
+function getRelevanceCategory(score: number): string {
+  if (score >= 90) return "High";
+  if (score >= 75) return "Medium";
+  if (score >= 60) return "Low";
+  return "Very Low";
 }
 
 serve(async (req) => {
@@ -107,7 +219,7 @@ serve(async (req) => {
       // Fetch document content for the provided document IDs
       const { data: documents, error } = await supabase
         .from('documents')
-        .select('document_id, name, content, url, type')
+        .select('document_id, name, content, url, type, metadata')
         .in('document_id', documentIds);
 
       if (error) {
@@ -143,7 +255,7 @@ serve(async (req) => {
           // Fetch the documents again to get the updated content
           const { data: updatedDocs, error: refetchError } = await supabase
             .from('documents')
-            .select('document_id, name, content, url, type')
+            .select('document_id, name, content, url, type, metadata')
             .in('document_id', documentIds);
             
           if (!refetchError && updatedDocs) {
@@ -153,57 +265,45 @@ serve(async (req) => {
           }
         }
         
-        // Format document content for inclusion in the prompt
-        documentContent = documents.map(doc => {
-          if (!doc.content) {
-            return `--- Document: ${doc.name} ---\nNo content available for this document.\n\n`;
-          }
-          return `--- Document: ${doc.name} ---\n${doc.content}\n\n`;
-        }).join("\n");
-        
         // Calculate relevance scores using the prompt and document content
         documentSourcesData = documents.map(doc => {
           const contentForScoring = doc.content || '';
+          const metadata = doc.metadata || {};
           
-          // Calculate a more accurate relevance score based on text similarity
+          // Calculate relevance score based on semantic similarity
           let relevanceScore = 60; // Base score
+          let relevanceCategory = "Low";
           
           if (contentForScoring && contentForScoring.length > 0 && prompt && prompt.length > 0) {
             // Calculate similarity between prompt and document content
-            const similarityScore = calculateTextSimilarity(prompt, contentForScoring);
-            
-            // Adjust final score to be in range 65-98 based on similarity
-            relevanceScore = 65 + Math.min(33, Math.round(similarityScore / 3));
-            
-            // Boost score for exact keyword matches
-            const promptKeywords = prompt.toLowerCase().split(/\s+/).filter(word => word.length > 3);
-            for (const keyword of promptKeywords) {
-              if (contentForScoring.toLowerCase().includes(keyword)) {
-                // Add a small boost for each exact keyword match
-                relevanceScore += 2;
-              }
-            }
-            
-            // Cap at 98% (save 99-100% for perfect matches)
-            relevanceScore = Math.min(98, relevanceScore);
+            relevanceScore = calculateTextSimilarity(prompt, contentForScoring);
+            relevanceCategory = getRelevanceCategory(relevanceScore);
           }
           
-          // Make sure each document has a unique score for better visualization
-          const randomAdjustment = Math.floor(Math.random() * 3) - 1;
+          // Extract the most relevant passages for this query
+          const relevantContent = extractRelevantPassages(prompt, contentForScoring);
           
           return {
             id: doc.document_id,
             title: doc.name,
-            content: (doc.content || '').substring(0, 1000) + ((doc.content || '').length > 1000 ? '...' : ''),
+            content: relevantContent.substring(0, 1500) + 
+                    ((relevantContent.length > 1500) ? '...' : ''),
             documentName: doc.name,
             url: doc.url,
             documentType: doc.type || 'unknown',
-            relevanceScore: Math.max(60, Math.min(98, relevanceScore + randomAdjustment))
+            relevanceScore: relevanceScore,
+            relevanceCategory: relevanceCategory,
+            wordCount: metadata?.word_count || contentForScoring.split(/\s+/).length
           };
         });
         
         // Sort documents by relevance score (highest first)
         documentSourcesData.sort((a, b) => b.relevanceScore - a.relevanceScore);
+        
+        // Format document content for inclusion in the prompt, starting with most relevant
+        documentContent = documentSourcesData.map(doc => {
+          return `--- Document: ${doc.documentName} (Relevance: ${doc.relevanceCategory}) ---\n${doc.content}\n\n`;
+        }).join("\n");
       } else {
         console.log("No document content found for IDs:", documentIds);
       }
@@ -223,6 +323,9 @@ serve(async (req) => {
     // Add a specific instruction to make sure the AI tries harder to find information in documents
     if (sources.useDocuments && documentContent) {
       systemContent += " Make sure to thoroughly examine all provided documents for relevant information before responding that you don't have the information.";
+      
+      // Add citation instruction
+      systemContent += " When referencing information from documents, please indicate which document the information came from by mentioning the document name.";
     }
 
     // Handle custom request template if provided
