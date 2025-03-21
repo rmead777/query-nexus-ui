@@ -179,11 +179,11 @@ export function DocumentUpload({
               variant: "destructive"
             });
           } else {
-            console.log('Document processed:', data);
+            console.log('Document processing result:', data);
             if (data && data.readable_content === false) {
               toast({
-                title: "Document processing issue",
-                description: "The document was uploaded but its content may not be fully readable. The system will continue trying to extract text.",
+                title: "Document processing",
+                description: "Your document was uploaded and is being processed for text extraction. This may take some time for PDFs and Word documents.",
                 variant: "default"
               });
             }
