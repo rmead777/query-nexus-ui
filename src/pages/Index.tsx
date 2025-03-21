@@ -54,6 +54,7 @@ const Index = () => {
   const [userDocuments, setUserDocuments] = useState<UserDocument[]>([]);
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const [documentSourceMode, setDocumentSourceMode] = useState<'all' | 'selected'>('all');
+  const [isFetchingDocuments, setIsFetchingDocuments] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -69,6 +70,8 @@ const Index = () => {
     if (!user) return;
     
     try {
+      setIsFetchingDocuments(true);
+      
       const { data, error } = await supabase
         .from('documents')
         .select('document_id, name')
@@ -77,10 +80,41 @@ const Index = () => {
         
       if (error) throw error;
       
+      console.log(`Fetched ${data?.length || 0} documents for user ${user.id}:`, data);
+      
       setUserDocuments(data?.map(doc => ({...doc, selected: true})) || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch your documents. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsFetchingDocuments(false);
     }
+  };
+  
+  const processUserDocuments = async (documentIds: string[]) => {
+    if (!documentIds.length) return;
+    
+    console.log(`Processing ${documentIds.length} documents...`);
+    
+    for (const docId of documentIds) {
+      try {
+        const { error } = await supabase.functions.invoke('process-document', {
+          body: { documentId: docId }
+        });
+        
+        if (error) {
+          console.error(`Error processing document ${docId}:`, error);
+        }
+      } catch (error) {
+        console.error(`Failed to process document ${docId}:`, error);
+      }
+    }
+    
+    console.log("Document processing complete");
   };
   
   const handleSendMessage = async (message: string) => {
@@ -165,10 +199,15 @@ const Index = () => {
           .map(doc => doc.document_id);
       }
       
+      // Pre-process documents to ensure content is available
+      if (documentIds.length > 0) {
+        await processUserDocuments(documentIds);
+      }
+      
       console.log("Sending request with provider:", provider);
       console.log("API Endpoint:", apiEndpoint);
       console.log("Model:", model);
-      console.log("Using documents:", documentIds.length);
+      console.log("Using documents:", documentIds);
       
       const { data, error } = await supabase.functions.invoke('create-assistant-completion', {
         body: {
@@ -232,22 +271,26 @@ const Index = () => {
       
       setMessages(prev => [...prev, assistantResponse]);
       
-      if (data.sources && Array.isArray(data.sources)) {
+      // Handle source data from response
+      if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+        console.log("Setting sources from response:", data.sources);
         setSources(data.sources);
-      } else if (sourcesSettings.useDocuments && documentIds.length > 0) {
+      } else if (data.documentIdsUsed && data.documentIdsUsed.length > 0) {
+        // If we have document IDs but no sources in the response, try to fetch them
+        console.log("No source data in response, but document IDs used. Fetching documents...");
         const documentSources: Source[] = [];
         
-        for (const docId of documentIds) {
+        for (const docId of data.documentIdsUsed) {
           try {
             const { data: docData } = await supabase
               .from('documents')
-              .select('name, content')
+              .select('name, content, document_id')
               .eq('document_id', docId)
               .single();
               
             if (docData && docData.content) {
               documentSources.push({
-                id: v4(),
+                id: docData.document_id || v4(),
                 title: docData.name,
                 content: docData.content,
                 documentName: docData.name,
@@ -260,8 +303,13 @@ const Index = () => {
         }
         
         if (documentSources.length > 0) {
+          console.log(`Setting ${documentSources.length} sources from document query`);
           setSources(documentSources);
+        } else {
+          console.log("No document sources found");
         }
+      } else {
+        console.log("No source data available");
       }
       
     } catch (error) {
@@ -378,7 +426,11 @@ const Index = () => {
                     
                     {documentSourceMode === 'selected' && (
                       <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
-                        {userDocuments.length > 0 ? (
+                        {isFetchingDocuments ? (
+                          <div className="text-sm text-muted-foreground animate-pulse">
+                            Loading documents...
+                          </div>
+                        ) : userDocuments.length > 0 ? (
                           userDocuments.map((doc) => (
                             <div key={doc.document_id} className="flex items-center space-x-2">
                               <Checkbox 
@@ -399,6 +451,19 @@ const Index = () => {
                             No documents found. Upload documents from the Documents page.
                           </div>
                         )}
+                      </div>
+                    )}
+                    
+                    {userDocuments.length > 0 && (
+                      <div className="mt-3 text-xs text-muted-foreground">
+                        <Button 
+                          variant="link" 
+                          size="sm" 
+                          className="h-auto p-0 text-xs"
+                          onClick={fetchUserDocuments}
+                        >
+                          Refresh document list
+                        </Button>
                       </div>
                     )}
                   </div>

@@ -16,6 +16,8 @@ serve(async (req) => {
   try {
     const { documentId } = await req.json();
     
+    console.log(`Processing document with ID: ${documentId}`);
+    
     if (!documentId) {
       return new Response(
         JSON.stringify({ error: 'Document ID is required' }),
@@ -38,42 +40,88 @@ serve(async (req) => {
     if (documentError || !document) {
       console.error('Error fetching document:', documentError);
       return new Response(
-        JSON.stringify({ error: 'Document not found' }),
+        JSON.stringify({ error: 'Document not found', details: documentError }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
     }
 
-    // Get the file from storage
-    const userId = document.user_id;
-    const filePath = `${userId}/${documentId}`;
+    console.log(`Found document: ${document.name} (type: ${document.type})`);
     
-    const { data: fileData, error: fileError } = await supabase
-      .storage
-      .from('documents')
-      .download(filePath);
-
-    if (fileError || !fileData) {
-      console.error('Error fetching file:', fileError);
-      return new Response(
-        JSON.stringify({ error: 'File not found in storage' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-
-    // Extract content based on file type
     let content = null;
     
-    // For text files, we can extract and store the content directly
-    if (document.type === 'txt' || document.type === 'text/plain' || 
-        document.name.endsWith('.txt') || document.name.endsWith('.md')) {
-      content = await fileData.text();
+    // Check if document already has content
+    if (document.content) {
+      console.log('Document already has content, skipping extraction');
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Document already has content',
+          content_extracted: true 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    // For other document types, we would typically use dedicated libraries
-    // This would require more complex processing with specialized libraries
-    // For now, we'll just handle text files, but this can be expanded
+    
+    // If no content, try to extract it from the URL or storage
+    if (document.url) {
+      try {
+        console.log(`Attempting to fetch content from URL: ${document.url}`);
+        const response = await fetch(document.url);
+        
+        if (response.ok) {
+          if (document.type === 'text/plain' || 
+              document.name.endsWith('.txt') || 
+              document.name.endsWith('.md')) {
+            content = await response.text();
+            console.log(`Successfully extracted ${content.length} characters of text`);
+          } else {
+            console.log(`Unsupported document type for direct extraction: ${document.type}`);
+            // For other types, we'd need more complex processing
+          }
+        } else {
+          console.error(`Failed to fetch from URL: ${response.status} ${response.statusText}`);
+        }
+      } catch (fetchError) {
+        console.error('Error fetching document content from URL:', fetchError);
+      }
+    }
+
+    // If still no content and we have user_id, try to get from storage
+    if (!content && document.user_id) {
+      try {
+        const userId = document.user_id;
+        const filePath = `${userId}/${documentId}`;
+        
+        console.log(`Attempting to download from storage: ${filePath}`);
+        
+        const { data: fileData, error: fileError } = await supabase
+          .storage
+          .from('documents')
+          .download(filePath);
+
+        if (fileError) {
+          console.error('Error downloading file from storage:', fileError);
+        } else if (fileData) {
+          // For text files, extract content
+          if (document.type === 'text/plain' || 
+              document.name.endsWith('.txt') || 
+              document.name.endsWith('.md')) {
+            content = await fileData.text();
+            console.log(`Successfully extracted ${content.length} characters of text from storage`);
+          } else {
+            console.log(`Unsupported document type for direct extraction: ${document.type}`);
+            // For other types, we'd need more complex processing
+          }
+        }
+      } catch (storageError) {
+        console.error('Error accessing storage:', storageError);
+      }
+    }
     
     // Only update if we extracted content
     if (content) {
+      console.log(`Updating document ${documentId} with ${content.length} characters of content`);
+      
       // Update the document with the extracted content
       const { error: updateError } = await supabase
         .from('documents')
@@ -83,25 +131,37 @@ serve(async (req) => {
       if (updateError) {
         console.error('Error updating document content:', updateError);
         return new Response(
-          JSON.stringify({ error: 'Failed to update document content' }),
+          JSON.stringify({ 
+            error: 'Failed to update document content', 
+            details: updateError 
+          }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         );
       }
+      
+      console.log('Document content updated successfully');
+    } else {
+      console.log('No content could be extracted from the document');
     }
     
     // Return success response
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Document processed successfully',
-        content_extracted: content !== null 
+        message: 'Document processed',
+        content_extracted: content !== null,
+        document_type: document.type,
+        document_name: document.name
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error processing document:', error);
     return new Response(
-      JSON.stringify({ error: 'Failed to process document' }),
+      JSON.stringify({ 
+        error: 'Failed to process document',
+        details: error.message 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

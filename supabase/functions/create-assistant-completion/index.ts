@@ -72,12 +72,14 @@ serve(async (req) => {
       
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+      // Log the document IDs we're looking for
+      console.log(`Attempting to fetch ${documentIds.length} documents with IDs:`, documentIds);
+
       // Fetch document content for the provided document IDs
       const { data: documents, error } = await supabase
         .from('documents')
-        .select('document_id, name, content')
-        .in('document_id', documentIds)
-        .not('content', 'is', null);
+        .select('document_id, name, content, url')
+        .in('document_id', documentIds);
 
       if (error) {
         console.error("Error fetching documents:", error);
@@ -86,23 +88,82 @@ serve(async (req) => {
       if (!error && documents && documents.length > 0) {
         console.log(`Found ${documents.length} documents for context`);
         
+        // Check for documents without content
+        const docsWithoutContent = documents.filter(doc => !doc.content);
+        if (docsWithoutContent.length > 0) {
+          console.log(`${docsWithoutContent.length} documents have no content, attempting to process them`);
+          
+          // Try to process each document that doesn't have content
+          for (const doc of docsWithoutContent) {
+            try {
+              console.log(`Processing document: ${doc.name} (${doc.document_id})`);
+              
+              // Call the process-document function to extract content
+              const { error: processError } = await supabase.functions.invoke('process-document', {
+                body: { documentId: doc.document_id }
+              });
+              
+              if (processError) {
+                console.error(`Error processing document ${doc.document_id}:`, processError);
+              }
+            } catch (e) {
+              console.error(`Failed to process document ${doc.document_id}:`, e);
+            }
+          }
+          
+          // Fetch the documents again to get the updated content
+          const { data: updatedDocs, error: refetchError } = await supabase
+            .from('documents')
+            .select('document_id, name, content, url')
+            .in('document_id', documentIds);
+            
+          if (!refetchError && updatedDocs) {
+            console.log(`Refetched ${updatedDocs.length} documents after processing`);
+            documents.length = 0; // Clear the array
+            documents.push(...updatedDocs); // Add the updated documents
+          }
+        }
+        
         // Format document content for inclusion in the prompt
         documentContent = documents.map(doc => {
+          if (!doc.content) {
+            return `--- Document: ${doc.name} ---\nNo content available for this document.\n\n`;
+          }
           return `--- Document: ${doc.name} ---\n${doc.content}\n\n`;
         }).join("\n");
         
         // Prepare sources data for frontend
         documentSourcesData = documents.map(doc => {
-          // Calculate a pseudo-relevance score between 85-100 for demonstration
-          // In a real implementation, you might want to use an embedding-based 
-          // similarity score or other relevance metrics
-          const relevanceScore = Math.floor(Math.random() * 16) + 85;
+          // Calculate a relevance score based on keyword presence or just use a random high score for demonstration
+          const contentForScoring = doc.content || '';
+          const promptLower = prompt.toLowerCase();
+          const contentLower = contentForScoring.toLowerCase();
+          
+          // Simple relevance scoring: check if any words from the prompt appear in the content
+          let relevanceScore = 85; // Base score
+          
+          if (contentLower && contentLower.length > 0) {
+            const promptWords = promptLower.split(/\s+/).filter(word => word.length > 3);
+            let matches = 0;
+            
+            for (const word of promptWords) {
+              if (contentLower.includes(word)) {
+                matches++;
+              }
+            }
+            
+            if (promptWords.length > 0) {
+              // Adjust score based on matches (between 85-100)
+              relevanceScore = 85 + Math.min(15, Math.round((matches / promptWords.length) * 15));
+            }
+          }
           
           return {
             id: doc.document_id,
             title: doc.name,
-            content: doc.content.substring(0, 1000) + (doc.content.length > 1000 ? '...' : ''),
+            content: (doc.content || '').substring(0, 1000) + ((doc.content || '').length > 1000 ? '...' : ''),
             documentName: doc.name,
+            url: doc.url,
             relevanceScore
           };
         });
