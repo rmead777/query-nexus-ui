@@ -44,7 +44,6 @@ export function DocumentUpload({
   
   const validateFiles = (filesToValidate: File[]) => {
     return filesToValidate.filter(file => {
-      // Check file size
       if (file.size > maxSize * 1024 * 1024) {
         toast({
           title: "File too large",
@@ -54,7 +53,6 @@ export function DocumentUpload({
         return false;
       }
       
-      // Check file type if accept is specified
       if (accept !== '*') {
         const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
         const acceptedTypes = accept.split(',');
@@ -118,11 +116,9 @@ export function DocumentUpload({
     
     try {
       for (const file of files) {
-        // Generate a unique document ID
         const documentId = uuidv4();
         const filePath = `${user.id}/${documentId}`;
         
-        // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('documents')
           .upload(filePath, file, {
@@ -139,12 +135,10 @@ export function DocumentUpload({
           continue;
         }
         
-        // Get public URL
         const { data: urlData } = supabase.storage
           .from('documents')
           .getPublicUrl(filePath);
         
-        // Store document metadata in database
         const { error: dbError } = await supabase
           .from('documents')
           .insert({
@@ -166,27 +160,32 @@ export function DocumentUpload({
         }
         
         try {
-          // Always process document with edge function right after upload
           const { data, error } = await supabase.functions.invoke('process-document', {
-            body: { documentId }
+            body: { 
+              documentId,
+              forceReprocess: true
+            }
           });
             
           if (error) {
             console.error('Error processing document:', error);
+            toast({
+              title: "Processing warning",
+              description: "The document was uploaded but there was an issue processing its contents. You can try reprocessing it later.",
+              variant: "destructive"
+            });
           } else {
             console.log('Document processed successfully:', data);
-            // If content wasn't readable, try one more time
             if (data && data.readable_content === false) {
-              console.log('Document content appears unreadable, trying one more time');
-              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit
-              await supabase.functions.invoke('process-document', {
-                body: { documentId, forceReprocess: true }
+              toast({
+                title: "Document processing issue",
+                description: "The document was uploaded but its content may not be fully readable. You can try reprocessing it later.",
+                variant: "warning"
               });
             }
           }
         } catch (processError) {
           console.error('Error processing document:', processError);
-          // Continue even if processing fails
         }
         
         uploadedFiles.push(file);
