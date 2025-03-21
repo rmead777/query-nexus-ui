@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { Json } from '@/integrations/supabase/types';
 
 // Define a type for the response sources settings
 export interface ResponseSourceSettings {
@@ -55,15 +56,32 @@ export function useSettings() {
         
         if (data) {
           // Parse response_sources if it exists
+          let responseSources: ResponseSourceSettings = {
+            useDocuments: true,
+            useKnowledgeBase: true,
+            useExternalSearch: false
+          };
+          
+          if (data.response_sources) {
+            responseSources = parseResponseSources(data.response_sources);
+          }
+          
           const processedSettings: UserSettings = {
             ...data,
             user_id: user.id,
-            response_sources: parseResponseSources(data.response_sources)
+            response_sources: responseSources
           };
           
           setSettings(processedSettings);
         } else {
-          setSettings(null);
+          setSettings({
+            user_id: user.id,
+            response_sources: {
+              useDocuments: true, 
+              useKnowledgeBase: true, 
+              useExternalSearch: false
+            }
+          });
         }
       } catch (error) {
         console.error('Error fetching settings:', error);
@@ -77,7 +95,7 @@ export function useSettings() {
   }, [user]);
 
   // Helper function to safely parse response_sources
-  const parseResponseSources = (responseSources: any): ResponseSourceSettings => {
+  const parseResponseSources = (responseSources: Json): ResponseSourceSettings => {
     const defaultSources: ResponseSourceSettings = {
       useDocuments: true,
       useKnowledgeBase: true,
@@ -117,10 +135,11 @@ export function useSettings() {
       // Handle response_sources for DB storage
       let settingsToSave = {...newSettings};
       
+      // Convert ResponseSourceSettings to Json for database storage
       if (newSettings.response_sources) {
         settingsToSave = {
           ...settingsToSave,
-          response_sources: newSettings.response_sources
+          response_sources: JSON.stringify(newSettings.response_sources)
         };
       }
 
@@ -134,7 +153,7 @@ export function useSettings() {
         // Update existing settings
         const { error } = await supabase
           .from('user_settings')
-          .update(settingsToSave)
+          .update({...settingsToSave})
           .eq('id', existingSettings.id);
 
         if (error) throw error;
@@ -151,7 +170,10 @@ export function useSettings() {
       }
 
       // Update local state
-      setSettings(prev => prev ? { ...prev, ...newSettings } : null);
+      setSettings(prev => {
+        if (!prev) return null;
+        return { ...prev, ...newSettings };
+      });
       
       return true;
     } catch (error) {

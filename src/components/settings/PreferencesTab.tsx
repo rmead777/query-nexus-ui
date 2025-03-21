@@ -5,14 +5,18 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useAutoSavePreference } from '@/hooks/use-auto-save-preference';
 import { Button } from '@/components/ui/button';
-import { useSettings } from '@/hooks/use-settings';
+import { useSettings, ResponseSourceSettings } from '@/hooks/use-settings';
 
 export interface PreferencesTabProps {
+  responseSources?: ResponseSourceSettings;
+  setResponseSources?: React.Dispatch<React.SetStateAction<ResponseSourceSettings>>;
   handleSaveSettings: (newSettings: any) => void;
   saving: boolean;
 }
 
 export function PreferencesTab({
+  responseSources,
+  setResponseSources,
   handleSaveSettings,
   saving
 }: PreferencesTabProps) {
@@ -32,7 +36,8 @@ export function PreferencesTab({
     const newSettings = {
       auto_save_conversations: autoSave,
       show_citations: showCitations,
-      citation_style: citationStyle
+      citation_style: citationStyle,
+      response_sources: responseSources
     };
     
     handleSaveSettings(newSettings);
@@ -83,6 +88,53 @@ export function PreferencesTab({
               <option value="footnote">Footnote</option>
               <option value="endnote">Endnote</option>
             </select>
+          </div>
+        )}
+        
+        {responseSources && setResponseSources && (
+          <div className="space-y-3 mt-4">
+            <h3 className="text-sm font-medium">Response Sources</h3>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="use-documents">Use Document Knowledge</Label>
+                <CardDescription>Use uploaded documents as knowledge sources.</CardDescription>
+              </div>
+              <Switch
+                id="use-documents"
+                checked={responseSources.useDocuments}
+                onCheckedChange={(checked) => 
+                  setResponseSources(prev => ({ ...prev, useDocuments: checked }))
+                }
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="use-knowledge-base">Use Knowledge Base</Label>
+                <CardDescription>Reference built-in knowledge base.</CardDescription>
+              </div>
+              <Switch
+                id="use-knowledge-base"
+                checked={responseSources.useKnowledgeBase}
+                onCheckedChange={(checked) => 
+                  setResponseSources(prev => ({ ...prev, useKnowledgeBase: checked }))
+                }
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="use-external-search">Use External Search</Label>
+                <CardDescription>Allow AI to search the internet for recent information.</CardDescription>
+              </div>
+              <Switch
+                id="use-external-search"
+                checked={responseSources.useExternalSearch}
+                onCheckedChange={(checked) => 
+                  setResponseSources(prev => ({ ...prev, useExternalSearch: checked }))
+                }
+              />
+            </div>
           </div>
         )}
         

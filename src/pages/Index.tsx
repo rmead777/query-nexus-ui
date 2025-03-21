@@ -1,12 +1,13 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatOutput } from '@/components/chat/ChatOutput';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { v4 } from '@/lib/uuid';
+import { v4 } from 'uuid';
 import { useConversationStore } from '@/hooks/use-conversation-store';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
@@ -29,9 +30,8 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Alert,
-  AlertCircle,
-  AlertTitle,
-  AlertDescription
+  AlertDescription,
+  AlertTitle
 } from "@/components/ui/alert";
 import {
   RadioGroup,
@@ -42,7 +42,8 @@ import { Label } from "@/components/ui/label";
 import { 
   FileText,
   Settings as SettingsIcon,
-  Loader2
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
 
