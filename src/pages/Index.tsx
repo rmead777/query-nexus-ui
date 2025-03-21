@@ -109,31 +109,70 @@ const Index = () => {
     
     let hasError = false;
     let processedCount = 0;
+    let needsReprocessingCount = 0;
+    
+    // First check which documents need processing
+    const documentsToProcess = [];
     
     for (const docId of documentIds) {
       try {
-        // First check if document has content
+        // Check if document has content and if it's readable
         const { data: docData, error: docError } = await supabase
           .from('documents')
-          .select('content')
+          .select('content, document_id')
           .eq('document_id', docId)
           .single();
           
-        // Only process documents without content
-        if (!docError && (!docData?.content || docData.content.length < 100)) {
-          console.log(`Processing document ${docId} as it has no content or little content`);
-          const { error } = await supabase.functions.invoke('process-document', {
-            body: { documentId: docId }
-          });
-          
-          if (error) {
-            console.error(`Error processing document ${docId}:`, error);
-            hasError = true;
-          } else {
-            processedCount++;
-          }
+        // Document needs processing if:
+        // 1. No content, or
+        // 2. Content is less than 100 chars, or
+        // 3. Content appears to be gibberish (like we see in the image)
+        const needsProcessing = !docError && (
+          !docData?.content || 
+          docData.content.length < 100 ||
+          // Check for gibberish by looking for a high proportion of special characters or lack of spaces
+          (docData.content.length > 0 && (
+            (docData.content.match(/[a-zA-Z]/g)?.length || 0) / docData.content.length < 0.3 ||
+            (docData.content.match(/\s/g)?.length || 0) / docData.content.length < 0.05
+          ))
+        );
+        
+        if (needsProcessing) {
+          console.log(`Document ${docId} needs processing`);
+          documentsToProcess.push(docId);
+          needsReprocessingCount++;
         } else {
-          console.log(`Document ${docId} already has content, skipping processing`);
+          console.log(`Document ${docId} already has valid content, skipping processing`);
+        }
+      } catch (error) {
+        console.error(`Failed to check document ${docId}:`, error);
+        // When in doubt, process anyway
+        documentsToProcess.push(docId);
+        needsReprocessingCount++;
+      }
+    }
+    
+    if (needsReprocessingCount > 0) {
+      console.log(`${needsReprocessingCount} documents need processing/reprocessing`);
+      toast({
+        title: "Processing Documents",
+        description: `Processing ${needsReprocessingCount} document${needsReprocessingCount > 1 ? 's' : ''} for AI access`,
+      });
+    }
+    
+    // Process documents that need it
+    for (const docId of documentsToProcess) {
+      try {
+        console.log(`Processing document ${docId}`);
+        const { error } = await supabase.functions.invoke('process-document', {
+          body: { documentId: docId }
+        });
+        
+        if (error) {
+          console.error(`Error processing document ${docId}:`, error);
+          hasError = true;
+        } else {
+          processedCount++;
         }
       } catch (error) {
         console.error(`Failed to process document ${docId}:`, error);

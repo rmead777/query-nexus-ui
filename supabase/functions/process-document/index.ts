@@ -44,141 +44,173 @@ function extractTextFromHTML(html: string): string {
   return text.trim();
 }
 
-// Improved parser for extracting text from PDFs
+// Simplified PDF text extraction with better encoding handling
 function extractTextFromPDF(buffer: ArrayBuffer): string {
-  const textDecoder = new TextDecoder();
-  const text = textDecoder.decode(buffer);
-  
-  // Extract PDF structure
-  const extractedText: string[] = [];
-  
-  // Find text objects
-  const textObjects = text.match(/BT[\s\S]*?ET/g) || [];
-  
-  for (const textObject of textObjects) {
-    // Extract text strings (between parentheses or with hex encoding)
-    const stringMatches = textObject.match(/\((.*?)\)|<([0-9A-Fa-f]+)>/g) || [];
+  try {
+    // Use plain text decoder first to check for UTF-8 content
+    const textDecoder = new TextDecoder('utf-8', { fatal: false });
+    const decodedText = textDecoder.decode(buffer);
     
-    for (const stringMatch of stringMatches) {
-      if (stringMatch.startsWith('(') && stringMatch.endsWith(')')) {
-        // Handle escaped parentheses and other characters
-        let content = stringMatch.slice(1, -1)
-          .replace(/\\\(/g, '(')
-          .replace(/\\\)/g, ')')
-          .replace(/\\\\/g, '\\');
-        
-        // Remove control characters
-        content = content.replace(/[\x00-\x1F\x7F]/g, '');
-        
-        if (content.trim().length > 0) {
-          extractedText.push(content);
-        }
-      } else if (stringMatch.startsWith('<') && stringMatch.endsWith('>')) {
-        // Hex encoded text
-        try {
-          const hexContent = stringMatch.slice(1, -1);
-          // Convert pairs of hex digits to characters
-          const hexPairs = hexContent.match(/.{1,2}/g) || [];
-          const decodedText = hexPairs
-            .map(hex => String.fromCharCode(parseInt(hex, 16)))
-            .join('')
-            .replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
-          
-          if (decodedText.trim().length > 0) {
-            extractedText.push(decodedText);
-          }
-        } catch (e) {
-          // Skip if there's an error in conversion
-        }
-      }
-    }
-  }
-  
-  // If standard extraction yields insufficient results, try fallback approaches
-  if (extractedText.join(' ').length < 200) {
-    // Look for text in content streams
-    const streamMatches = text.match(/stream\s([\s\S]*?)\sendstream/g) || [];
-    for (const stream of streamMatches) {
-      const cleanStream = stream
-        .replace(/stream\s/, '')
-        .replace(/\sendstream/, '')
-        .replace(/[\x00-\x1F\x7F]/g, ' ');
-      
-      // Extract text that looks like words (3+ characters)
-      const potentialWords = cleanStream.match(/[A-Za-z]{3,}/g) || [];
-      if (potentialWords.length > 0) {
-        extractedText.push(potentialWords.join(' '));
-      }
+    // Check if we got readable text from standard decoding
+    if (isReadableText(decodedText)) {
+      console.log("Successfully extracted readable text with standard UTF-8 decoding");
+      return cleanupExtractedText(decodedText);
     }
     
-    // Simple text extraction as last resort
-    const simpleMatches = text.match(/\(\s*([A-Za-z0-9\s.,;:'"!?-]{3,})\s*\)/g) || [];
-    for (const match of simpleMatches) {
-      const content = match.slice(1, -1).trim();
-      if (content.length > 0) {
+    // If standard method fails, try to extract text objects
+    const text = decodedText;
+    const extractedText: string[] = [];
+    
+    // Extract text directly using regex patterns common in PDFs
+    // Look for text blocks
+    const textBlocks = text.match(/\(\s*([A-Za-z0-9\s.,;:'"!?-]{3,})\s*\)/g) || [];
+    for (const block of textBlocks) {
+      const content = block.slice(1, -1).trim();
+      if (content.length > 0 && isReadableText(content)) {
         extractedText.push(content);
       }
     }
+    
+    // If we found readable text via regex
+    if (extractedText.length > 0) {
+      console.log(`Extracted ${extractedText.length} text blocks from PDF using regex pattern matching`);
+      return cleanupExtractedText(extractedText.join(' '));
+    }
+    
+    // Last resort: try to extract any ASCII text
+    const asciiText = Array.from(new Uint8Array(buffer))
+      .filter(byte => byte >= 32 && byte <= 126) // ASCII printable characters
+      .map(byte => String.fromCharCode(byte))
+      .join('');
+      
+    const cleanedAsciiText = asciiText
+      .replace(/[^\x20-\x7E\n\r\t]/g, '') // Keep only printable ASCII
+      .replace(/\s+/g, ' ')
+      .trim();
+      
+    if (cleanedAsciiText.length > 200 && isReadableText(cleanedAsciiText)) {
+      console.log("Extracted text using ASCII character filtering");
+      return cleanupExtractedText(cleanedAsciiText);
+    }
+    
+    return "This document appears to be in a binary format or encrypted. Text extraction was unsuccessful.";
+  } catch (e) {
+    console.error("Error in PDF extraction:", e);
+    return "Error extracting text from PDF. The document may be scanned, encrypted or in an unsupported format.";
   }
+}
+
+// Check if text is likely human-readable (not gibberish)
+function isReadableText(text: string): boolean {
+  if (!text || text.length < 20) return false;
   
-  // Join all extracted text fragments
-  let result = extractedText.join(' ')
-    .replace(/\s+/g, ' ')
+  // Sample the text to check for readability
+  const sample = text.slice(0, 500);
+  
+  // Check for reasonable character distribution
+  const letterCount = (sample.match(/[a-zA-Z]/g) || []).length;
+  const spaceCount = (sample.match(/\s/g) || []).length;
+  const digitCount = (sample.match(/\d/g) || []).length;
+  const punctuationCount = (sample.match(/[.,;:'"!?-]/g) || []).length;
+  const totalCount = sample.length;
+  
+  // Text should have a reasonable proportion of letters
+  const letterRatio = letterCount / totalCount;
+  // Text should have spaces between words
+  const spaceRatio = spaceCount / totalCount;
+  // Text shouldn't be mostly special characters
+  const specialCharRatio = (totalCount - letterCount - spaceCount - digitCount - punctuationCount) / totalCount;
+  
+  // For readable text, we expect:
+  // - A significant portion to be letters (typically >30%)
+  // - Some spaces between words (typically >5%)
+  // - Not too many special characters (typically <30%)
+  return (
+    letterRatio > 0.3 && 
+    spaceRatio > 0.05 && 
+    specialCharRatio < 0.3
+  );
+}
+
+// Clean up extracted text for better readability
+function cleanupExtractedText(text: string): string {
+  return text
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove control characters
+    .replace(/\s+/g, ' ')                 // Normalize whitespace
+    .replace(/\r\n|\r|\n/g, '\n')         // Normalize line breaks
+    .replace(/(\n\s*){3,}/g, '\n\n')      // Remove excessive line breaks
     .trim();
-  
-  if (result.length < 100) {
-    // If extraction still yields minimal results, include a note
-    result += "\n\nNote: This PDF appears to be mostly image-based or contains minimal extractable text.";
-  }
-  
-  return result;
 }
 
 // Extract text from Word documents
 function extractTextFromDOCX(buffer: ArrayBuffer): string {
   try {
-    // This is a simplified approach since we can't use libraries like mammoth.js in Deno
+    // Simple approach since we can't use libraries in Deno
     const text = new TextDecoder().decode(buffer);
     
-    // Look for text content between XML tags that typically contain document text
-    const contentMatches = text.match(/<w:t[^>]*>(.*?)<\/w:t>/g) || [];
-    const extractedText = contentMatches
-      .map(match => {
-        // Extract content between tags
-        const content = match.replace(/<w:t[^>]*>/, '').replace(/<\/w:t>/, '');
-        // Decode XML entities
-        return content
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'");
-      })
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    if (extractedText.length > 0) {
-      return extractedText;
-    } else {
-      // Fallback to looking for any text-like content
-      const wordMatches = text.match(/>[A-Za-z0-9\s.,;:'"!?-]{3,}</g) || [];
-      if (wordMatches.length > 0) {
-        return wordMatches
-          .map(match => match.slice(1, -1))
+    // Check if it's readable as is (XML format)
+    if (isReadableText(text)) {
+      // Look for text content between XML tags that typically contain document text
+      const contentMatches = text.match(/<w:t[^>]*>(.*?)<\/w:t>/g) || [];
+      if (contentMatches.length > 0) {
+        const extractedText = contentMatches
+          .map(match => {
+            // Extract content between tags
+            const content = match.replace(/<w:t[^>]*>/, '').replace(/<\/w:t>/, '');
+            // Decode XML entities
+            return content
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&apos;/g, "'");
+          })
           .join(' ')
           .replace(/\s+/g, ' ')
           .trim();
+        
+        console.log(`Successfully extracted ${extractedText.length} characters from DOCX XML structure`);
+        return extractedText;
       }
     }
     
-    return "This document appears to be a Word document but text extraction is limited.";
+    // Fallback to extracting any text-like content
+    const wordMatches = text.match(/>[A-Za-z0-9\s.,;:'"!?-]{3,}</g) || [];
+    const potentialText = wordMatches
+      .map(match => match.slice(1, -1))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+      
+    if (potentialText.length > 0 && isReadableText(potentialText)) {
+      console.log(`Extracted text of length ${potentialText.length} from DOCX using pattern matching`);
+      return potentialText;
+    }
+    
+    // ASCII extraction as last resort
+    const asciiText = Array.from(new Uint8Array(buffer))
+      .filter(byte => byte >= 32 && byte <= 126) // ASCII printable characters
+      .map(byte => String.fromCharCode(byte))
+      .join('');
+      
+    const cleanedAsciiText = asciiText
+      .replace(/[^\x20-\x7E\n\r\t]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+      
+    if (cleanedAsciiText.length > 200 && isReadableText(cleanedAsciiText)) {
+      console.log("Extracted DOCX text using ASCII filtering");
+      return cleanupExtractedText(cleanedAsciiText);
+    }
+    
+    return "This document appears to be a Word document but text extraction is limited on this platform.";
   } catch (e) {
     console.error('Error extracting text from DOCX:', e);
-    return "Document type (DOCX) encountered an error during content extraction.";
+    return "Error extracting text from Word document. The file may be corrupt or in an unsupported format.";
   }
 }
 
+// Main handler function
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -221,9 +253,9 @@ serve(async (req) => {
     
     let content = null;
     
-    // Check if document already has content
-    if (document.content) {
-      console.log('Document already has content, skipping extraction');
+    // Check if document already has content that's readable
+    if (document.content && document.content.length > 100 && isReadableText(document.content)) {
+      console.log('Document already has readable content, skipping extraction');
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -234,13 +266,15 @@ serve(async (req) => {
       );
     }
     
-    // If no content, try to extract it from the URL or storage
+    // If no content or unreadable content, try to extract it from the URL or storage
+    let fetchSuccess = false;
     if (document.url) {
       try {
         console.log(`Attempting to fetch content from URL: ${document.url}`);
         const response = await fetch(document.url);
         
         if (response.ok) {
+          fetchSuccess = true;
           const contentType = document.type || response.headers.get('content-type') || '';
           
           if (contentType.includes('text/plain') || 
@@ -258,13 +292,7 @@ serve(async (req) => {
             // PDF files
             const buffer = await response.arrayBuffer();
             content = extractTextFromPDF(buffer);
-            console.log(`Successfully extracted ${content.length} characters from PDF`);
-            
-            // If the PDF extraction returned very little text, it's likely a scanned document
-            if (content.length < 200) {
-              console.log("PDF appears to be image-based or has limited extractable text");
-              content += "\n\nNote: This document appears to be image-based or has limited extractable text.";
-            }
+            console.log(`Extracted ${content.length} characters from PDF`);
           } else if (contentType.includes('application/json') || document.name.endsWith('.json')) {
             // JSON files
             const json = await response.json();
@@ -283,7 +311,14 @@ serve(async (req) => {
             console.log(`Extracted content from DOCX: ${content.length} characters`);
           } else {
             console.log(`Unsupported document type for direct extraction: ${contentType}`);
-            content = `Document type (${contentType}) not supported for direct content extraction.`;
+            // Try to extract as plain text anyway
+            const text = await response.text();
+            if (isReadableText(text)) {
+              content = cleanupExtractedText(text);
+              console.log(`Treated as plain text, extracted ${content.length} characters`);
+            } else {
+              content = `Document type (${contentType}) not supported for direct content extraction.`;
+            }
           }
         } else {
           console.error(`Failed to fetch from URL: ${response.status} ${response.statusText}`);
@@ -294,7 +329,7 @@ serve(async (req) => {
     }
 
     // If still no content and we have user_id, try to get from storage
-    if ((!content || content.length < 50) && document.user_id) {
+    if ((!content || !isReadableText(content)) && document.user_id) {
       try {
         const userId = document.user_id;
         const filePath = `${userId}/${documentId}`;
@@ -327,11 +362,6 @@ serve(async (req) => {
             const buffer = await fileData.arrayBuffer();
             content = extractTextFromPDF(buffer);
             console.log(`Successfully extracted ${content.length} characters from PDF in storage`);
-            
-            if (content.length < 200) {
-              console.log("PDF appears to be image-based or has limited extractable text");
-              content += "\n\nNote: This document appears to be image-based or has limited extractable text.";
-            }
           } else if (document.name.endsWith('.docx') || 
                     contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
             // Word documents
@@ -339,8 +369,36 @@ serve(async (req) => {
             content = extractTextFromDOCX(buffer);
             console.log(`Extracted content from DOCX in storage: ${content.length} characters`);
           } else {
-            console.log(`Unsupported document type for storage extraction: ${contentType}`);
-            content = `Document type (${contentType}) not supported for storage content extraction.`;
+            // Try generic text extraction for other types
+            try {
+              const text = await fileData.text();
+              if (isReadableText(text)) {
+                content = cleanupExtractedText(text);
+                console.log(`Treated as plain text from storage, extracted ${content.length} characters`);
+              } else {
+                // Try binary extraction
+                const buffer = await fileData.arrayBuffer();
+                const asciiText = Array.from(new Uint8Array(buffer))
+                  .filter(byte => byte >= 32 && byte <= 126)
+                  .map(byte => String.fromCharCode(byte))
+                  .join('');
+                  
+                const cleanedText = asciiText
+                  .replace(/[^\x20-\x7E\n\r\t]/g, '')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+                  
+                if (cleanedText.length > 200 && isReadableText(cleanedText)) {
+                  content = cleanedText;
+                  console.log(`Extracted readable ASCII text from binary file: ${content.length} characters`);
+                } else {
+                  content = `Document type (${contentType}) not supported for storage content extraction.`;
+                }
+              }
+            } catch (textError) {
+              console.error('Error extracting text from file:', textError);
+              content = "Failed to extract readable text from this document.";
+            }
           }
         }
       } catch (storageError) {
@@ -349,7 +407,12 @@ serve(async (req) => {
     }
     
     // Only update if we extracted content
-    if (content) {
+    if (content && (!document.content || !isReadableText(document.content))) {
+      // Final check for readability
+      if (!isReadableText(content)) {
+        content = "The system was unable to extract readable text from this document. It may be a scanned image, encrypted, or in a format that's not supported for text extraction.";
+      }
+      
       console.log(`Updating document ${documentId} with ${content.length} characters of content`);
       
       try {
@@ -381,8 +444,22 @@ serve(async (req) => {
       }
       
       console.log('Document content updated successfully');
-    } else {
+    } else if (!content) {
       console.log('No content could be extracted from the document');
+      // Set a placeholder message when no content could be extracted
+      content = "The system was unable to extract any content from this document.";
+      try {
+        const { error: updateError } = await supabase
+          .from('documents')
+          .update({ content })
+          .eq('document_id', documentId);
+          
+        if (updateError) {
+          console.error('Error updating document with placeholder content:', updateError);
+        }
+      } catch (updateError) {
+        console.error('Error updating document with placeholder:', updateError);
+      }
     }
     
     // Return success response
@@ -392,7 +469,8 @@ serve(async (req) => {
         message: 'Document processed',
         content_extracted: content !== null,
         document_type: document.type,
-        document_name: document.name
+        document_name: document.name,
+        readable_content: content ? isReadableText(content) : false
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
