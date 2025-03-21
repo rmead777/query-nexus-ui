@@ -9,32 +9,35 @@ import { Switch } from '@/components/ui/switch';
 import { RequestTemplateEditor } from '@/components/settings/RequestTemplateEditor';
 import { Save, Loader2, HelpCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ApiEndpoint } from '@/types/api';
 
-interface AdvancedApiSettings {
+export interface AdvancedApiSettings {
   requestTemplate: Record<string, any> | null;
   showAdvanced: boolean;
+  temperature: number;
+  maxTokens: number;
+  instructions: string;
 }
 
-interface ApiSettings {
+export interface ApiSettings {
   endpoint: string;
   apiKey: string;
+  apiEndpoint: string;
   model: string;
   temperature: number;
   maxTokens: number;
   instructions: string;
 }
 
-interface AdvancedTabProps {
+export interface AdvancedTabProps {
   advancedSettings: AdvancedApiSettings;
   setAdvancedSettings: React.Dispatch<React.SetStateAction<AdvancedApiSettings>>;
   apiSettings: ApiSettings;
   setApiSettings: React.Dispatch<React.SetStateAction<ApiSettings>>;
-  handleSaveSettings: (settingType: 'preferences' | 'api' | 'azure' | 'advanced') => Promise<void>;
+  handleSaveSettings: (settingType: 'preferences' | 'api' | 'azure' | 'advanced') => Promise<void> | void;
   saving: boolean;
   newEndpoint: Partial<ApiEndpoint>;
 }
-
-import { ApiEndpoint } from '@/types/api';
 
 export const AdvancedTab = ({
   advancedSettings,
@@ -76,8 +79,8 @@ export const AdvancedTab = ({
                 min="0"
                 max="2"
                 step="0.1"
-                value={apiSettings.temperature}
-                onChange={(e) => setApiSettings({...apiSettings, temperature: parseFloat(e.target.value)})}
+                value={advancedSettings.temperature}
+                onChange={(e) => setAdvancedSettings({...advancedSettings, temperature: parseFloat(e.target.value)})}
               />
             </div>
             
@@ -99,8 +102,8 @@ export const AdvancedTab = ({
                 min="100"
                 max="32000"
                 step="100"
-                value={apiSettings.maxTokens}
-                onChange={(e) => setApiSettings({...apiSettings, maxTokens: parseInt(e.target.value)})}
+                value={advancedSettings.maxTokens}
+                onChange={(e) => setAdvancedSettings({...advancedSettings, maxTokens: parseInt(e.target.value)})}
               />
             </div>
           </div>
@@ -121,8 +124,8 @@ export const AdvancedTab = ({
               id="instructions-input"
               placeholder="You are a helpful assistant that provides accurate and concise information."
               rows={3}
-              value={apiSettings.instructions}
-              onChange={(e) => setApiSettings({...apiSettings, instructions: e.target.value})}
+              value={advancedSettings.instructions}
+              onChange={(e) => setAdvancedSettings({...advancedSettings, instructions: e.target.value})}
             />
           </div>
           

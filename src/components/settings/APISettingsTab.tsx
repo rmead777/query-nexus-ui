@@ -9,16 +9,17 @@ import { ApiEndpoint, ModelOption } from '@/types/api';
 import { Eye, EyeOff, Save, Loader2, Check, HelpCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-interface ApiSettings {
+export interface ApiSettings {
   endpoint: string;
   apiKey: string;
+  apiEndpoint: string;
   model: string;
   temperature: number;
   maxTokens: number;
   instructions: string;
 }
 
-interface APISettingsTabProps {
+export interface APISettingsTabProps {
   apiSettings: ApiSettings;
   setApiSettings: React.Dispatch<React.SetStateAction<ApiSettings>>;
   apiEndpoints: ApiEndpoint[];
@@ -28,7 +29,7 @@ interface APISettingsTabProps {
   selectedModel: string | null;
   handleEndpointSelect: (endpointId: string) => void;
   handleModelSelect: (modelValue: string) => void;
-  handleSaveSettings: (settingType: 'preferences' | 'api' | 'azure' | 'advanced') => Promise<void>;
+  handleSaveSettings: (settingType: 'preferences' | 'api' | 'azure' | 'advanced') => Promise<void> | void;
   saving: boolean;
   newEndpoint: Partial<ApiEndpoint>;
   handleProviderSelect: (providerValue: string) => void;
@@ -162,8 +163,8 @@ export const APISettingsTab = ({
               </div>
               <Input
                 id="api-endpoint"
-                value={apiSettings.endpoint}
-                onChange={(e) => setApiSettings({...apiSettings, endpoint: e.target.value})}
+                value={apiSettings.apiEndpoint}
+                onChange={(e) => setApiSettings({...apiSettings, apiEndpoint: e.target.value})}
                 placeholder="https://api.openai.com/v1"
               />
             </div>

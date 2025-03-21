@@ -10,6 +10,41 @@ import { EndpointsTab } from '@/components/settings/EndpointsTab';
 import { useToast } from "@/components/ui/use-toast";
 import { useSettings, ResponseSourceSettings } from '@/hooks/use-settings';
 import { useLocation } from 'react-router-dom';
+import { ApiEndpoint } from '@/types/api';
+
+// Define types for each tab's settings
+interface ApiSettingsState {
+  apiKey: string;
+  apiEndpoint: string;
+  model: string;
+  endpoint: string;
+  temperature: number;
+  maxTokens: number;
+  instructions: string;
+}
+
+interface AzureSettingsState {
+  useAzure: boolean;
+  azureApiKey: string;
+  azureEndpointUrl: string;
+  azureDeploymentName: string;
+  azureSearchEndpoint: string;
+  azureSearchKey: string;
+  azureSearchIndexName: string;
+  endpointUrl: string;
+  deploymentName: string;
+  searchEndpoint: string;
+  searchKey: string;
+  searchIndexName: string;
+}
+
+interface AdvancedSettingsState {
+  temperature: number;
+  maxTokens: number;
+  instructions: string;
+  requestTemplate: Record<string, any> | null;
+  showAdvanced: boolean;
+}
 
 const Settings = () => {
   const { toast } = useToast();
@@ -28,26 +63,37 @@ const Settings = () => {
   }, [location]);
 
   // Set up state for each tab's settings
-  const [apiSettings, setApiSettings] = useState({
+  const [apiSettings, setApiSettings] = useState<ApiSettingsState>({
     apiKey: '',
     apiEndpoint: '',
     model: 'gpt-4o-mini',
+    endpoint: '',
+    temperature: 0.7,
+    maxTokens: 2048,
+    instructions: ''
   });
 
-  const [azureSettings, setAzureSettings] = useState({
+  const [azureSettings, setAzureSettings] = useState<AzureSettingsState>({
     useAzure: false,
     azureApiKey: '',
     azureEndpointUrl: '',
     azureDeploymentName: '',
     azureSearchEndpoint: '',
     azureSearchKey: '',
-    azureSearchIndexName: ''
+    azureSearchIndexName: '',
+    endpointUrl: '',
+    deploymentName: '',
+    searchEndpoint: '',
+    searchKey: '',
+    searchIndexName: ''
   });
 
-  const [advancedSettings, setAdvancedSettings] = useState({
+  const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettingsState>({
     temperature: 0.7,
     maxTokens: 2048,
-    instructions: ''
+    instructions: '',
+    requestTemplate: null,
+    showAdvanced: false
   });
 
   const [responseSources, setResponseSources] = useState<ResponseSourceSettings>({
@@ -56,6 +102,31 @@ const Settings = () => {
     useExternalSearch: false
   });
 
+  // For the endpoints tab
+  const [apiEndpoints, setApiEndpoints] = useState<ApiEndpoint[]>([]);
+  const [selectedEndpointId, setSelectedEndpointId] = useState<string | null>(null);
+  const [isAddingEndpoint, setIsAddingEndpoint] = useState(false);
+  const [newEndpoint, setNewEndpoint] = useState<Partial<ApiEndpoint>>({
+    name: '',
+    provider: 'OpenAI',
+    api_endpoint: '',
+    api_key: '',
+    model: ''
+  });
+
+  const handleProviderSelect = (provider: string) => {
+    setNewEndpoint(prev => ({ ...prev, provider }));
+  };
+
+  const handleEndpointSelect = (endpointId: string) => {
+    // This would be implemented to select an endpoint
+    console.log("Selected endpoint:", endpointId);
+  };
+
+  const handleModelSelect = (model: string) => {
+    setApiSettings(prev => ({ ...prev, model }));
+  };
+
   // Load settings when available
   useEffect(() => {
     if (settings) {
@@ -63,6 +134,10 @@ const Settings = () => {
         apiKey: settings.api_key || '',
         apiEndpoint: settings.api_endpoint || '',
         model: settings.model || 'gpt-4o-mini',
+        endpoint: settings.api_endpoint || '',
+        temperature: settings.temperature || 0.7,
+        maxTokens: settings.max_tokens || 2048,
+        instructions: settings.instructions || ''
       });
 
       setAzureSettings({
@@ -72,13 +147,20 @@ const Settings = () => {
         azureDeploymentName: settings.azure_deployment_name || '',
         azureSearchEndpoint: settings.azure_search_endpoint || '',
         azureSearchKey: settings.azure_search_key || '',
-        azureSearchIndexName: settings.azure_search_index_name || ''
+        azureSearchIndexName: settings.azure_search_index_name || '',
+        endpointUrl: settings.azure_endpoint_url || '',
+        deploymentName: settings.azure_deployment_name || '',
+        searchEndpoint: settings.azure_search_endpoint || '',
+        searchKey: settings.azure_search_key || '',
+        searchIndexName: settings.azure_search_index_name || ''
       });
 
       setAdvancedSettings({
         temperature: settings.temperature || 0.7,
         maxTokens: settings.max_tokens || 2048,
-        instructions: settings.instructions || ''
+        instructions: settings.instructions || '',
+        requestTemplate: null,
+        showAdvanced: false
       });
 
       if (settings.response_sources) {
@@ -124,14 +206,24 @@ const Settings = () => {
             <APISettingsTab 
               apiSettings={apiSettings}
               setApiSettings={setApiSettings}
-              onSave={(values) => {
-                handleSaveSettings({
-                  api_key: values.apiKey,
-                  api_endpoint: values.apiEndpoint,
-                  model: values.model
-                });
-              }}
+              apiEndpoints={apiEndpoints}
+              selectedEndpointId={selectedEndpointId}
+              setSelectedEndpointId={setSelectedEndpointId}
+              modelOptions={[
+                { value: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI' },
+                { value: 'gpt-4o-mini', label: 'GPT-4o Mini', provider: 'OpenAI' }
+              ]}
+              selectedModel={apiSettings.model}
+              handleEndpointSelect={handleEndpointSelect}
+              handleModelSelect={handleModelSelect}
+              handleSaveSettings={(type) => handleSaveSettings({
+                api_key: apiSettings.apiKey,
+                api_endpoint: apiSettings.apiEndpoint,
+                model: apiSettings.model
+              })}
               saving={saving}
+              newEndpoint={newEndpoint}
+              handleProviderSelect={handleProviderSelect}
             />
           </TabsContent>
           
@@ -141,23 +233,38 @@ const Settings = () => {
               setAzureSettings={setAzureSettings}
               useAzure={azureSettings.useAzure}
               setUseAzure={(useAzure) => setAzureSettings(prev => ({...prev, useAzure}))}
-              onSave={(values) => {
-                handleSaveSettings({
-                  use_azure: values.useAzure,
-                  azure_api_key: values.azureApiKey,
-                  azure_endpoint_url: values.azureEndpointUrl,
-                  azure_deployment_name: values.azureDeploymentName,
-                  azure_search_endpoint: values.azureSearchEndpoint,
-                  azure_search_key: values.azureSearchKey,
-                  azure_search_index_name: values.azureSearchIndexName
-                });
+              initialValues={{
+                useAzure: azureSettings.useAzure,
+                azureApiKey: azureSettings.azureApiKey,
+                azureEndpointUrl: azureSettings.azureEndpointUrl,
+                azureDeploymentName: azureSettings.azureDeploymentName,
+                azureSearchEndpoint: azureSettings.azureSearchEndpoint,
+                azureSearchKey: azureSettings.azureSearchKey,
+                azureSearchIndexName: azureSettings.azureSearchIndexName
               }}
+              onSave={(values) => handleSaveSettings({
+                use_azure: values.useAzure,
+                azure_api_key: values.azureApiKey,
+                azure_endpoint_url: values.azureEndpointUrl,
+                azure_deployment_name: values.azureDeploymentName,
+                azure_search_endpoint: values.azureSearchEndpoint,
+                azure_search_key: values.azureSearchKey,
+                azure_search_index_name: values.azureSearchIndexName
+              })}
               saving={saving}
             />
           </TabsContent>
           
           <TabsContent value="endpoints">
-            <EndpointsTab />
+            <EndpointsTab 
+              initialValues={{
+                apiEndpoint: apiSettings.apiEndpoint || ''
+              }}
+              onSave={(values) => handleSaveSettings({
+                api_endpoint: values.apiEndpoint
+              })}
+              saving={saving}
+            />
           </TabsContent>
           
           <TabsContent value="preferences">
@@ -182,14 +289,13 @@ const Settings = () => {
               setAdvancedSettings={setAdvancedSettings}
               apiSettings={apiSettings}
               setApiSettings={setApiSettings}
-              onSave={(values) => {
-                handleSaveSettings({
-                  temperature: values.temperature,
-                  max_tokens: values.maxTokens,
-                  instructions: values.instructions
-                });
-              }}
+              handleSaveSettings={(type) => handleSaveSettings({
+                temperature: advancedSettings.temperature,
+                max_tokens: advancedSettings.maxTokens,
+                instructions: advancedSettings.instructions
+              })}
               saving={saving}
+              newEndpoint={newEndpoint}
             />
           </TabsContent>
         </Tabs>

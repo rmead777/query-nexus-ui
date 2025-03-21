@@ -106,6 +106,7 @@ export function useSettings() {
 
     try {
       if (typeof responseSources === 'string') {
+        // Try to parse JSON string
         const parsed = JSON.parse(responseSources);
         return {
           useDocuments: parsed.useDocuments ?? defaultSources.useDocuments,
@@ -114,11 +115,13 @@ export function useSettings() {
         };
       } 
       
-      if (typeof responseSources === 'object') {
+      if (typeof responseSources === 'object' && responseSources !== null) {
+        // Handle object type
+        const sources = responseSources as Record<string, any>;
         return {
-          useDocuments: responseSources.useDocuments ?? defaultSources.useDocuments,
-          useKnowledgeBase: responseSources.useKnowledgeBase ?? defaultSources.useKnowledgeBase,
-          useExternalSearch: responseSources.useExternalSearch ?? defaultSources.useExternalSearch
+          useDocuments: typeof sources.useDocuments === 'boolean' ? sources.useDocuments : defaultSources.useDocuments,
+          useKnowledgeBase: typeof sources.useKnowledgeBase === 'boolean' ? sources.useKnowledgeBase : defaultSources.useKnowledgeBase,
+          useExternalSearch: typeof sources.useExternalSearch === 'boolean' ? sources.useExternalSearch : defaultSources.useExternalSearch
         };
       }
     } catch (e) {
@@ -133,7 +136,7 @@ export function useSettings() {
 
     try {
       // Handle response_sources for DB storage
-      let settingsToSave = {...newSettings};
+      let settingsToSave: Record<string, any> = {...newSettings};
       
       // Convert ResponseSourceSettings to Json for database storage
       if (newSettings.response_sources) {
@@ -153,7 +156,7 @@ export function useSettings() {
         // Update existing settings
         const { error } = await supabase
           .from('user_settings')
-          .update({...settingsToSave})
+          .update(settingsToSave)
           .eq('id', existingSettings.id);
 
         if (error) throw error;
