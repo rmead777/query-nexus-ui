@@ -91,65 +91,58 @@ serve(async (req) => {
     const fileName = document.name.toLowerCase();
     const fileType = document.type || getMimeTypeFromFileName(fileName);
     
+    // IMPORTANT: We only process plaintext files directly
+    // Binary files like PDFs/DOCXs are flagged for external processing
     try {
-      // Simple text extraction for common file types
-      if (fileName.endsWith('.txt') || fileName.endsWith('.md') || 
-          fileType.includes('text/plain') || fileType.includes('markdown')) {
+      // Only attempt to extract text from plain text files
+      if (fileName.endsWith('.txt') || 
+          fileName.endsWith('.md') || 
+          fileType.includes('text/plain') || 
+          fileType.includes('markdown')) {
         console.log('Extracting text from plain text document');
         content = await fileData.text();
         extractionMethod = "text";
       } 
       else if (fileName.endsWith('.pdf') || fileType.includes('pdf')) {
-        console.log('Processing PDF document');
-        // For PDFs, we can't reliably extract text on the edge function
-        // So we'll store a placeholder and notify the user
-        extractionMethod = "pdf_placeholder";
-        content = "This document is a PDF. The system is processing it for text extraction. Check back later or search directly in your document.";
+        console.log('Processing PDF document - storing placeholder');
+        extractionMethod = "pdf_binary";
+        content = "This document is a PDF that needs specialized processing. PDF content will be available after processing.";
       } 
-      else if (fileName.endsWith('.docx') || fileType.includes('word') || 
-               fileType.includes('officedocument')) {
-        console.log('Processing DOCX document');
-        // For DOCX, we can't reliably extract text on the edge function
-        // So we'll store a placeholder and notify the user
-        extractionMethod = "docx_placeholder";
-        content = "This document is a DOCX file. The system is processing it for text extraction. Check back later or search directly in your document.";
+      else if (fileName.endsWith('.docx') || 
+                fileType.includes('word') || 
+                fileType.includes('officedocument')) {
+        console.log('Processing DOCX document - storing placeholder');
+        extractionMethod = "docx_binary";
+        content = "This document is a DOCX file that needs specialized processing. Document content will be available after processing.";
       } 
       else {
-        // For other file types, we'll try basic text extraction as a fallback
-        console.log('Unknown document type, trying basic text extraction');
-        try {
-          content = await fileData.text();
-          extractionMethod = "text_fallback";
-        } catch (textError) {
-          console.error('Text extraction failed:', textError);
-          content = "This document type couldn't be processed automatically. Please try converting it to PDF, DOCX, or TXT format.";
-          extractionMethod = "failed";
-        }
+        // For other files, we don't attempt text extraction at all
+        console.log('Unknown binary document type - storing placeholder');
+        extractionMethod = "binary";
+        content = "This document type requires specialized processing. Content will be extracted separately.";
       }
     } catch (extractionError) {
       console.error('Extraction error:', extractionError);
-      content = `Failed to extract content: ${extractionError.message}`;
       extractionMethod = "error";
+      content = "There was an error processing this document. It may require specialized handling.";
     }
     
-    // Save the actual file content for future processing of binary files
-    // This ensures we have the raw file data available for better extraction later
-    try {
-      // Set a flag for binary files (PDF, DOCX) that need processing
-      const needsExternalProcessing = fileName.endsWith('.pdf') || 
-                                    fileName.endsWith('.docx') || 
-                                    fileType.includes('pdf') || 
-                                    fileType.includes('word') ||
-                                    fileType.includes('officedocument');
-                                    
-      // Update the document with extracted content
+    // Flag all binary documents for external processing
+    const isBinaryDocument = fileName.endsWith('.pdf') || 
+                            fileName.endsWith('.docx') || 
+                            fileType.includes('pdf') || 
+                            fileType.includes('word') ||
+                            fileType.includes('officedocument');
+    
+    // Update the document with extracted content or placeholder for binary files
+    try {                         
       const { error: updateError } = await supabase
         .from('documents')
         .update({ 
           content,
           extraction_method: extractionMethod,
-          is_readable: extractionMethod === "text" || extractionMethod === "text_fallback",
-          needs_processing: needsExternalProcessing
+          is_readable: extractionMethod === "text",
+          needs_processing: isBinaryDocument
         })
         .eq('document_id', documentId);
 
@@ -171,11 +164,12 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         message: 'Document processed successfully',
-        content_extracted: true,
+        content_extracted: extractionMethod === "text",
         extraction_method: extractionMethod,
         document_type: document.type,
         document_name: document.name,
-        readable_content: extractionMethod === "text" || extractionMethod === "text_fallback",
+        is_binary: isBinaryDocument,
+        readable_content: extractionMethod === "text",
         content_sample: content.substring(0, 100) + '...',
         content_length: content.length
       }),
