@@ -1,45 +1,21 @@
+
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { 
-  BadgeCheck, 
-  Info, 
-  KeyRound, 
-  Save, 
-  Settings as SettingsIcon,
-  BookOpen,
-  Brain,
-  Search,
-  Eye,
-  EyeOff,
-  Plus,
-  Trash2,
-  Edit,
-  Check,
-  HelpCircle
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2 } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ApiEndpoint, ModelOption } from '@/types/api';
-import { Textarea } from '@/components/ui/textarea';
-import { RequestTemplateEditor } from '@/components/settings/RequestTemplateEditor';
-import { defaultRequestTemplates, RequestTemplate } from '@/types/api';
-import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ApiEndpoint, ModelOption, defaultRequestTemplates } from '@/types/api';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
+// Import refactored components
+import { PreferencesTab } from '@/components/settings/PreferencesTab';
+import { APISettingsTab } from '@/components/settings/APISettingsTab';
+import { EndpointsTab } from '@/components/settings/EndpointsTab';
+import { AzureTab } from '@/components/settings/AzureTab';
+import { AdvancedTab } from '@/components/settings/AdvancedTab';
 
 interface ResponseSourceSettings {
   useDocuments: boolean;
@@ -127,7 +103,7 @@ const Settings = () => {
     const searchParams = new URLSearchParams(location.search);
     const tab = searchParams.get('tab');
     
-    if (tab && ['preferences', 'api', 'endpoints', 'advanced'].includes(tab)) {
+    if (tab && ['preferences', 'api', 'endpoints', 'advanced', 'azure'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [location]);
@@ -592,338 +568,91 @@ const Settings = () => {
         
         <TooltipProvider>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-            <TabsList className="grid w-full grid-cols-4 mb-6">
+            <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="preferences">Preferences</TabsTrigger>
               <TabsTrigger value="api">API Settings</TabsTrigger>
               <TabsTrigger value="endpoints">API Keys & Endpoints</TabsTrigger>
+              <TabsTrigger value="azure">Azure</TabsTrigger>
               <TabsTrigger value="advanced">Advanced</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="preferences" className="animate-fade-in space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <SettingsIcon className="h-5 w-5" />
-                    Application Preferences
-                  </CardTitle>
-                  <CardDescription>
-                    Customize your application experience.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label className="text-base">Auto-save conversations</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Automatically save your conversations for future reference
-                        </p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-                    
-                    <Separator />
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label className="text-base">Show sources by default</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Always show the sources panel when available
-                        </p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-                    
-                    <Separator />
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label className="text-base">Citations in responses</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Include citation references in AI responses
-                        </p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button 
-                    onClick={() => handleSaveSettings('preferences')}
-                    className="ml-auto"
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Preferences
-                      </>
-                    )}
-                  </Button>
-                </CardFooter>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Search className="h-5 w-5" />
-                    AI Response Sources
-                  </CardTitle>
-                  <CardDescription>
-                    Control where the AI should source information for responses
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-start space-x-3">
-                      <Checkbox 
-                        id="use-documents" 
-                        checked={responseSources.useDocuments}
-                        onCheckedChange={(checked) => 
-                          setResponseSources({...responseSources, useDocuments: checked === true})}
-                      />
-                      <div className="space-y-1">
-                        <Label 
-                          htmlFor="use-documents" 
-                          className="text-base font-medium flex items-center gap-1.5"
-                        >
-                          <BookOpen className="h-4 w-4" />
-                          Uploaded Documents
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Limit responses to information found in the uploaded or saved documents only
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start space-x-3">
-                      <Checkbox 
-                        id="use-knowledge-base" 
-                        checked={responseSources.useKnowledgeBase}
-                        onCheckedChange={(checked) => 
-                          setResponseSources({...responseSources, useKnowledgeBase: checked === true})}
-                      />
-                      <div className="space-y-1">
-                        <Label 
-                          htmlFor="use-knowledge-base" 
-                          className="text-base font-medium flex items-center gap-1.5"
-                        >
-                          <Brain className="h-4 w-4" />
-                          AI Knowledge Base
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Allow the AI to use its pre-trained knowledge to answer questions
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start space-x-3">
-                      <Checkbox 
-                        id="use-external-search" 
-                        checked={responseSources.useExternalSearch}
-                        onCheckedChange={(checked) => 
-                          setResponseSources({...responseSources, useExternalSearch: checked === true})}
-                      />
-                      <div className="space-y-1">
-                        <Label 
-                          htmlFor="use-external-search" 
-                          className="text-base font-medium flex items-center gap-1.5"
-                        >
-                          <Search className="h-4 w-4" />
-                          External Search
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Allow the AI to search for additional information from external sources
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-sm p-3 rounded-md bg-blue-50 text-blue-600">
-                    <Info className="h-4 w-4" />
-                    <span>
-                      Using multiple sources provides more comprehensive responses, but may increase response time.
-                      For the most accurate document-specific answers, enable "Uploaded Documents" only.
-                    </span>
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button 
-                    onClick={() => handleSaveSettings('preferences')}
-                    className="ml-auto"
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Source Settings
-                      </>
-                    )}
-                  </Button>
-                </CardFooter>
-              </Card>
+            <TabsContent value="preferences">
+              <PreferencesTab 
+                responseSources={responseSources}
+                setResponseSources={setResponseSources}
+                handleSaveSettings={handleSaveSettings}
+                saving={saving}
+              />
             </TabsContent>
             
-            <TabsContent value="api" className="space-y-6 animate-fade-in">
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        Active API Settings
-                      </CardTitle>
-                      <CardDescription>
-                        Configure your active language model API settings.
-                      </CardDescription>
-                    </div>
-                    {apiEndpoints.length > 0 && (
-                      <div>
-                        <Select 
-                          value={selectedEndpointId || undefined} 
-                          onValueChange={(value) => {
-                            setSelectedEndpointId(value);
-                            handleEndpointSelect(value);
-                          }}
-                        >
-                          <SelectTrigger className="w-[220px]">
-                            <SelectValue placeholder="Select API endpoint" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {apiEndpoints.map(endpoint => (
-                              <SelectItem key={endpoint.id} value={endpoint.id}>
-                                {endpoint.name} {endpoint.is_active && <Check className="inline-block h-4 w-4 ml-1" />}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <Label htmlFor="provider-select">Provider</Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Select the company that provides the AI model (e.g., OpenAI, Anthropic). This determines the API endpoint format and available models.</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <Select
-                        value={newEndpoint.provider}
-                        onValueChange={handleProviderSelect}
-                      >
-                        <SelectTrigger id="provider-select">
-                          <SelectValue placeholder="Select a provider" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="OpenAI">OpenAI</SelectItem>
-                          <SelectItem value="Anthropic">Anthropic</SelectItem>
-                          <SelectItem value="Google">Google (Gemini)</SelectItem>
-                          <SelectItem value="Cohere">Cohere</SelectItem>
-                          <SelectItem value="Custom">Custom Provider</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <Label htmlFor="model-select">Model</Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>The specific AI model to use. Different models have varying capabilities, token limits, and pricing. More advanced models (like GPT-4o) generally provide better responses but cost more.</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <Select
-                        value={selectedModel || undefined}
-                        onValueChange={handleModelSelect}
-                      >
-                        <SelectTrigger id="model-select">
-                          <SelectValue placeholder="Select a model" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {modelOptions.map(model => (
-                            <SelectItem key={model.value} value={model.value}>
-                              {model.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <Label htmlFor="api-endpoint">API Endpoint</Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>The URL where API requests are sent. For most providers, the default endpoint works, but you can customize it for enterprise accounts or proxy services. Typically ends with /v1 for OpenAI.</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <Input
-                        id="api-endpoint"
-                        value={apiSettings.endpoint}
-                        onChange={(e) => setApiSettings({...apiSettings, endpoint: e.target.value})}
-                        placeholder="https://api.openai.com/v1"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <Label htmlFor="api-key">API Key</Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Your authentication key for the AI service. Keep this secret as it grants access to paid API services. You can get this from your provider's dashboard.</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          id="api-key"
-                          type={showApiKey ? "text" : "password"}
-                          value={apiSettings.apiKey}
-                          onChange={(e) => setApiSettings({...apiSettings, apiKey: e.target.value})}
-                          placeholder="Your API key"
-                          className="pr-10"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-10 w-10"
-                          onClick={() => setShowApiKey(!showApiKey)}
-                        >
-                          {showApiKey ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                          <span className="sr-only">
-                            {showApiKey ? "Hide API key" : "Show API key"}
-                          </span>
-                        </Button>
-                      </div>
+            <TabsContent value="api">
+              <APISettingsTab 
+                apiSettings={apiSettings}
+                setApiSettings={setApiSettings}
+                apiEndpoints={apiEndpoints}
+                selectedEndpointId={selectedEndpointId}
+                setSelectedEndpointId={setSelectedEndpointId}
+                modelOptions={modelOptions}
+                selectedModel={selectedModel}
+                handleEndpointSelect={handleEndpointSelect}
+                handleModelSelect={handleModelSelect}
+                handleSaveSettings={handleSaveSettings}
+                saving={saving}
+                newEndpoint={newEndpoint}
+                handleProviderSelect={handleProviderSelect}
+              />
+            </TabsContent>
+            
+            <TabsContent value="endpoints">
+              <EndpointsTab 
+                apiEndpoints={apiEndpoints}
+                newEndpoint={newEndpoint}
+                setNewEndpoint={setNewEndpoint}
+                isAddingEndpoint={isAddingEndpoint}
+                setIsAddingEndpoint={setIsAddingEndpoint}
+                isEditingEndpoint={isEditingEndpoint}
+                setIsEditingEndpoint={setIsEditingEndpoint}
+                handleAddEndpoint={handleAddEndpoint}
+                handleEditEndpoint={handleEditEndpoint}
+                handleDeleteEndpoint={handleDeleteEndpoint}
+                handleSetActiveEndpoint={handleSetActiveEndpoint}
+                saving={saving}
+                showNewApiKey={showNewApiKey}
+                setShowNewApiKey={setShowNewApiKey}
+              />
+            </TabsContent>
+            
+            <TabsContent value="azure">
+              <AzureTab 
+                azureSettings={azureSettings}
+                setAzureSettings={setAzureSettings}
+                useAzure={useAzure}
+                setUseAzure={setUseAzure}
+                handleSaveSettings={handleSaveSettings}
+                saving={saving}
+                showAzureKey={showAzureKey}
+                setShowAzureKey={setShowAzureKey}
+                showSearchKey={showSearchKey}
+                setShowSearchKey={setShowSearchKey}
+              />
+            </TabsContent>
+            
+            <TabsContent value="advanced">
+              <AdvancedTab 
+                advancedSettings={advancedSettings}
+                setAdvancedSettings={setAdvancedSettings}
+                apiSettings={apiSettings}
+                setApiSettings={setApiSettings}
+                handleSaveSettings={handleSaveSettings}
+                saving={saving}
+                newEndpoint={newEndpoint}
+              />
+            </TabsContent>
+          </Tabs>
+        </TooltipProvider>
+      </div>
+    </MainLayout>
+  );
+};
+
+export default Settings;
