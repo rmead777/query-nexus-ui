@@ -267,12 +267,13 @@ serve(async (req) => {
         
         // Calculate relevance scores using the prompt and document content
         documentSourcesData = documents.map(doc => {
+          // Fallback to empty string if content is null or undefined
           const contentForScoring = doc.content || '';
           const metadata = doc.metadata || {};
           
           // Calculate relevance score based on semantic similarity
-          let relevanceScore = 60; // Base score
-          let relevanceCategory = "Low";
+          let relevanceScore = 70; // Default score is now higher
+          let relevanceCategory = "Medium"; // Default category is now Medium
           
           if (contentForScoring && contentForScoring.length > 0 && prompt && prompt.length > 0) {
             // Calculate similarity between prompt and document content
@@ -454,7 +455,7 @@ serve(async (req) => {
     let responseData = data;
     
     // If we have document content, add sources information
-    if (documentContent && documentIds.length > 0) {
+    if (documentSourcesData.length > 0) {
       responseData = {
         ...data,
         documentIdsUsed: documentIds,

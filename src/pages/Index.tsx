@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useToast } from "@/components/ui/use-toast";
 import { v4 } from '@/lib/uuid';
 import { useNavigate } from 'react-router-dom';
-import { Settings, FileText, Check } from 'lucide-react';
+import { Settings, FileText, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -23,6 +23,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Message {
   id: string;
@@ -38,6 +39,8 @@ interface Source {
   content: string;
   documentName?: string;
   relevanceScore: number; 
+  relevanceCategory?: string;
+  wordCount?: number;
 }
 
 interface UserDocument {
@@ -55,6 +58,8 @@ const Index = () => {
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const [documentSourceMode, setDocumentSourceMode] = useState<'all' | 'selected'>('all');
   const [isFetchingDocuments, setIsFetchingDocuments] = useState(false);
+  const [processingError, setProcessingError] = useState<string | null>(null);
+  const [hasSourcesUsed, setHasSourcesUsed] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -98,8 +103,10 @@ const Index = () => {
   const processUserDocuments = async (documentIds: string[]) => {
     if (!documentIds.length) return;
     
+    setProcessingError(null);
     console.log(`Processing ${documentIds.length} documents...`);
     
+    let hasError = false;
     for (const docId of documentIds) {
       try {
         const { error } = await supabase.functions.invoke('process-document', {
@@ -108,10 +115,16 @@ const Index = () => {
         
         if (error) {
           console.error(`Error processing document ${docId}:`, error);
+          hasError = true;
         }
       } catch (error) {
         console.error(`Failed to process document ${docId}:`, error);
+        hasError = true;
       }
+    }
+    
+    if (hasError) {
+      setProcessingError("Some documents couldn't be processed. The AI will try to use the available content.");
     }
     
     console.log("Document processing complete");
@@ -127,6 +140,8 @@ const Index = () => {
     
     setMessages(prev => [...prev, newMessage]);
     setIsLoading(true);
+    setHasSourcesUsed(false);
+    setSources([]); // Clear previous sources
     
     try {
       let apiEndpoint = null;
@@ -275,6 +290,7 @@ const Index = () => {
       if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
         console.log("Setting sources from response:", data.sources);
         setSources(data.sources);
+        setHasSourcesUsed(true);
       } else if (data.documentIdsUsed && data.documentIdsUsed.length > 0) {
         // If we have document IDs but no sources in the response, try to fetch them
         console.log("No source data in response, but document IDs used. Fetching documents...");
@@ -305,11 +321,13 @@ const Index = () => {
         if (documentSources.length > 0) {
           console.log(`Setting ${documentSources.length} sources from document query`);
           setSources(documentSources);
+          setHasSourcesUsed(true);
         } else {
           console.log("No document sources found");
         }
       } else {
         console.log("No source data available");
+        setHasSourcesUsed(false);
       }
       
     } catch (error) {
@@ -469,13 +487,23 @@ const Index = () => {
                   </div>
                 )}
                 
+                {processingError && (
+                  <Alert className="mx-4 mb-4 animate-in fade-in">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Processing Warning</AlertTitle>
+                    <AlertDescription>
+                      {processingError}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
                 <div className="flex-1 overflow-y-auto subtle-scroll pb-10">
                   <ChatOutput messages={messages} isLoading={isLoading} />
                 </div>
               </div>
             </ResizablePanel>
             
-            {sources.length > 0 && !isMobile && (
+            {sources.length > 0 && hasSourcesUsed && !isMobile && (
               <>
                 <ResizableHandle withHandle />
                 <ResizablePanel defaultSize={25} minSize={20}>
