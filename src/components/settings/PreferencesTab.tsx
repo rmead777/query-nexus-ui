@@ -1,27 +1,23 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useAutoSavePreference } from '@/hooks/use-auto-save-preference';
+import { Button } from '@/components/ui/button';
+
+export interface ResponseSourceSettings {
+  useDocuments: boolean;
+  useKnowledgeBase: boolean;
+  useExternalSearch: boolean;
+}
 
 interface PreferencesTabProps {
-  responseSources: {
-    useDocuments: boolean;
-    useKnowledgeBase: boolean;
-    useExternalSearch: boolean;
-  };
-  setResponseSources: React.Dispatch<React.SetStateAction<{
-    useDocuments: boolean;
-    useKnowledgeBase: boolean;
-    useExternalSearch: boolean;
-  }>>;
   handleSaveSettings: () => void;
   saving: boolean;
 }
 
 export function PreferencesTab({
-  responseSources,
-  setResponseSources,
   handleSaveSettings,
   saving
 }: PreferencesTabProps) {

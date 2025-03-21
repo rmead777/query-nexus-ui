@@ -12,21 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 
-// Helper function to convert JSONB messages back to our Message type
-const jsonbToMessages = (jsonb: Json) => {
-  if (!jsonb || !Array.isArray(jsonb)) return [];
-  
-  return jsonb.map((msg: any) => ({
-    id: msg.id,
-    content: msg.content,
-    role: msg.role as 'user' | 'assistant',
-    timestamp: new Date(msg.timestamp)
-  }));
-};
-
 interface Conversation {
   id: string;
-  conversation_id?: string;
   title: string;
   preview: string;
   messages: Json;
@@ -70,8 +57,7 @@ const Conversations = () => {
   }, [user]);
   
   const handleOpenConversation = async (conversation: Conversation) => {
-    const conversationId = conversation.conversation_id || conversation.id;
-    const success = await loadConversation(conversationId);
+    const success = await loadConversation(conversation.id);
     
     if (success) {
       navigate('/');

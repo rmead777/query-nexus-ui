@@ -31,7 +31,7 @@ const messagesToJsonb = (messages: Message[]): Json => {
 };
 
 // Helper function to convert JSONB messages back to our Message type
-const jsonbToMessages = (jsonb: Json): Message[] => {
+export const jsonbToMessages = (jsonb: Json): Message[] => {
   if (!jsonb || !Array.isArray(jsonb)) return [];
   
   return jsonb.map((msg: any) => ({
@@ -100,7 +100,7 @@ export function useConversationStore() {
         const { data: existingConversation } = await supabase
           .from('conversations')
           .select('id')
-          .eq('conversation_id', currentConversation.id)
+          .eq('id', currentConversation.id)
           .single();
         
         if (existingConversation) {
@@ -114,20 +114,19 @@ export function useConversationStore() {
               preview: preview,
               is_favorite: false
             })
-            .eq('conversation_id', currentConversation.id);
+            .eq('id', currentConversation.id);
         } else {
           // Insert new conversation
           await supabase
             .from('conversations')
             .insert({
               id: currentConversation.id,
-              conversation_id: currentConversation.id,
-              user_id: user.id,
               title: currentConversation.title || preview,
               messages: messagesToJsonb(currentConversation.messages),
               message_count: currentConversation.messages.length,
               preview: preview,
-              is_favorite: false
+              is_favorite: false,
+              user_id: user.id
             });
         }
       } catch (error) {
@@ -199,17 +198,17 @@ export function useConversationStore() {
       const { data, error } = await supabase
         .from('conversations')
         .select('*')
-        .eq('conversation_id', conversationId)
+        .eq('id', conversationId)
         .single();
       
       if (error) throw error;
       
       if (data) {
         setCurrentConversation({
-          id: data.conversation_id || data.id,
+          id: data.id,
           messages: jsonbToMessages(data.messages),
           title: data.title,
-          lastUpdated: new Date(data.updated_at || data.created_at)
+          lastUpdated: new Date(data.created_at)
         });
         
         return true;
