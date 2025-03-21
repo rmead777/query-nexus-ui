@@ -179,92 +179,6 @@ function extractTextFromDOCX(buffer: ArrayBuffer): string {
   }
 }
 
-// New function to normalize text for better comparison
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '') // Remove punctuation
-    .replace(/\s+/g, ' ')    // Normalize whitespace
-    .trim();
-}
-
-// More sophisticated semantic similarity calculation
-function calculateTextSimilarity(query: string, documentText: string): number {
-  if (!query || !documentText) return 0;
-  
-  // Normalize texts
-  const normalizedQuery = normalizeText(query);
-  const normalizedDoc = normalizeText(documentText);
-  
-  // Extract unique keywords (words longer than 3 characters)
-  const queryWords = normalizedQuery.split(/\s+/).filter(word => word.length > 3);
-  const uniqueQueryWords = Array.from(new Set(queryWords));
-  
-  // Skip calculation if query is too short
-  if (uniqueQueryWords.length === 0) return 60; // Default score
-  
-  // Calculate exact matches
-  let exactMatchCount = 0;
-  for (const word of uniqueQueryWords) {
-    if (normalizedDoc.includes(word)) {
-      exactMatchCount++;
-    }
-  }
-  
-  // Calculate partial matches (words that are part of document words)
-  let partialMatchCount = 0;
-  for (const word of uniqueQueryWords) {
-    if (word.length > 4) { // Only consider substantial words
-      const docWords = normalizedDoc.split(/\s+/);
-      for (const docWord of docWords) {
-        if (docWord.includes(word) || word.includes(docWord)) {
-          partialMatchCount += 0.5; // Half weight for partial matches
-          break; // Count each query word only once
-        }
-      }
-    }
-  }
-  
-  // Check for phrase matches (higher weight)
-  let phraseBonus = 0;
-  if (queryWords.length > 1) {
-    // Look for sequences of 2-3 words from the query
-    for (let i = 0; i < queryWords.length - 1; i++) {
-      const twoWordPhrase = queryWords.slice(i, i + 2).join(' ');
-      if (normalizedDoc.includes(twoWordPhrase)) {
-        phraseBonus += 10; // Significant bonus for phrase matches
-      }
-      
-      if (i < queryWords.length - 2) {
-        const threeWordPhrase = queryWords.slice(i, i + 3).join(' ');
-        if (normalizedDoc.includes(threeWordPhrase)) {
-          phraseBonus += 20; // Higher bonus for longer phrase matches
-        }
-      }
-    }
-  }
-  
-  // Calculate the TF-IDF-like relevance score
-  const baseScore = ((exactMatchCount + partialMatchCount) / uniqueQueryWords.length) * 100;
-  
-  // Adjust score based on document length and context
-  const contextAdjustment = Math.min(20, Math.log(documentText.length / 100));
-  const finalScore = Math.min(98, Math.max(60, baseScore + phraseBonus + contextAdjustment));
-  
-  return Math.round(finalScore);
-}
-
-// Analyze document content structure to identify sections
-function analyzeDocumentStructure(content: string) {
-  // This function could detect headings, paragraphs, and sections for better context extraction
-  // For now we'll return a simple structure
-  return {
-    hasStructure: content.includes('\n\n'),
-    sections: content.split('\n\n').filter(s => s.trim().length > 0),
-    potentialHeadings: content.match(/[A-Z][A-Za-z0-9\s]{2,30}:(?:\s|$)/g) || []
-  };
-}
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -439,22 +353,10 @@ serve(async (req) => {
       console.log(`Updating document ${documentId} with ${content.length} characters of content`);
       
       try {
-        // Create document metadata
-        const structure = analyzeDocumentStructure(content);
-        const metadata = {
-          word_count: content.split(/\s+/).length,
-          has_structure: structure.hasStructure,
-          potential_sections: structure.sections.length,
-          processed_at: new Date().toISOString()
-        };
-        
-        // Update the document with the extracted content and metadata
+        // Update the document with the extracted content
         const { error: updateError } = await supabase
           .from('documents')
-          .update({ 
-            content,
-            metadata
-          })
+          .update({ content })
           .eq('document_id', documentId);
 
         if (updateError) {
@@ -469,25 +371,13 @@ serve(async (req) => {
         }
       } catch (updateError) {
         console.error('Error updating document:', updateError);
-        // If error is related to metadata JSON structure, try updating just the content
-        try {
-          const { error: contentUpdateError } = await supabase
-            .from('documents')
-            .update({ content })
-            .eq('document_id', documentId);
-            
-          if (contentUpdateError) {
-            throw contentUpdateError;
-          }
-        } catch (fallbackError) {
-          return new Response(
-            JSON.stringify({ 
-              error: 'Failed to update document', 
-              details: fallbackError 
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-          );
-        }
+        return new Response(
+          JSON.stringify({ 
+            error: 'Failed to update document', 
+            details: updateError 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
       }
       
       console.log('Document content updated successfully');

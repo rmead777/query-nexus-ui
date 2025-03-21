@@ -39,7 +39,7 @@ function normalizeText(text: string): string {
 
 // Enhanced semantic similarity between two texts
 function calculateTextSimilarity(query: string, documentText: string): number {
-  if (!query || !documentText) return 60; // Default base score
+  if (!query || !documentText) return 75; // Higher default base score
   
   // Normalize texts
   const normalizedQuery = normalizeText(query);
@@ -50,7 +50,7 @@ function calculateTextSimilarity(query: string, documentText: string): number {
   const uniqueQueryWords = Array.from(new Set(queryWords));
   
   // Skip calculation if query is too short
-  if (uniqueQueryWords.length === 0) return 60; // Default score
+  if (uniqueQueryWords.length === 0) return 75; // Default score
   
   // Document words (for term frequency)
   const docWords = normalizedDoc.split(/\s+/).filter(word => word.length > 3);
@@ -112,13 +112,13 @@ function calculateTextSimilarity(query: string, documentText: string): number {
   // Adjust with weighted components
   const baseScore = matchRatio * 100;
   const frequencyBonus = weightedMatchScore * 2;
-  const documentScore = Math.min(98, Math.max(60, 
+  const documentScore = Math.min(98, Math.max(75, 
     baseScore + frequencyBonus + phraseBonus + earlyContextBonus - lengthPenalty
   ));
   
   // Add slight randomization for better visualization when scores are close
   const randomAdjustment = Math.floor(Math.random() * 3) - 1;
-  return Math.min(98, Math.max(60, Math.round(documentScore + randomAdjustment)));
+  return Math.min(98, Math.max(75, Math.round(documentScore + randomAdjustment)));
 }
 
 // Extract most relevant passages from a document based on query
@@ -164,9 +164,8 @@ function extractRelevantPassages(query: string, documentContent: string, maxPass
 // Creates a labeled relevance category for a score
 function getRelevanceCategory(score: number): string {
   if (score >= 90) return "High";
-  if (score >= 75) return "Medium";
-  if (score >= 60) return "Low";
-  return "Very Low";
+  if (score >= 80) return "Medium";
+  return "Low";
 }
 
 serve(async (req) => {
@@ -219,7 +218,7 @@ serve(async (req) => {
       // Fetch document content for the provided document IDs
       const { data: documents, error } = await supabase
         .from('documents')
-        .select('document_id, name, content, url, type, metadata')
+        .select('document_id, name, content, url, type')
         .in('document_id', documentIds);
 
       if (error) {
@@ -255,7 +254,7 @@ serve(async (req) => {
           // Fetch the documents again to get the updated content
           const { data: updatedDocs, error: refetchError } = await supabase
             .from('documents')
-            .select('document_id, name, content, url, type, metadata')
+            .select('document_id, name, content, url, type')
             .in('document_id', documentIds);
             
           if (!refetchError && updatedDocs) {
@@ -269,10 +268,9 @@ serve(async (req) => {
         documentSourcesData = documents.map(doc => {
           // Fallback to empty string if content is null or undefined
           const contentForScoring = doc.content || '';
-          const metadata = doc.metadata || {};
           
           // Calculate relevance score based on semantic similarity
-          let relevanceScore = 70; // Default score is now higher
+          let relevanceScore = 80; // Higher default score 
           let relevanceCategory = "Medium"; // Default category is now Medium
           
           if (contentForScoring && contentForScoring.length > 0 && prompt && prompt.length > 0) {
@@ -294,7 +292,7 @@ serve(async (req) => {
             documentType: doc.type || 'unknown',
             relevanceScore: relevanceScore,
             relevanceCategory: relevanceCategory,
-            wordCount: metadata?.word_count || contentForScoring.split(/\s+/).length
+            wordCount: contentForScoring ? contentForScoring.split(/\s+/).length : 0
           };
         });
         
@@ -397,7 +395,6 @@ serve(async (req) => {
     if (provider === "Custom") {
       // Check if endpoint contains 'azure' in the URL, which might indicate Azure OpenAI
       if (endpoint.includes("azure")) {
-        // Azure OpenAI service requires different parameter names
         console.log("Using Azure OpenAI format");
         // No changes needed here - Azure now uses the same format as OpenAI
       } else if (endpoint.includes("responses")) {

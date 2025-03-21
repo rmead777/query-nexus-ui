@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useToast } from "@/components/ui/use-toast";
 import { v4 } from '@/lib/uuid';
 import { useNavigate } from 'react-router-dom';
-import { Settings, FileText, Check, AlertCircle } from 'lucide-react';
+import { Settings, FileText, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -87,6 +87,7 @@ const Index = () => {
       
       console.log(`Fetched ${data?.length || 0} documents for user ${user.id}:`, data);
       
+      // Ensure all documents are selected by default
       setUserDocuments(data?.map(doc => ({...doc, selected: true})) || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
@@ -107,15 +108,32 @@ const Index = () => {
     console.log(`Processing ${documentIds.length} documents...`);
     
     let hasError = false;
+    let processedCount = 0;
+    
     for (const docId of documentIds) {
       try {
-        const { error } = await supabase.functions.invoke('process-document', {
-          body: { documentId: docId }
-        });
-        
-        if (error) {
-          console.error(`Error processing document ${docId}:`, error);
-          hasError = true;
+        // First check if document has content
+        const { data: docData, error: docError } = await supabase
+          .from('documents')
+          .select('content')
+          .eq('document_id', docId)
+          .single();
+          
+        // Only process documents without content
+        if (!docError && (!docData?.content || docData.content.length < 100)) {
+          console.log(`Processing document ${docId} as it has no content or little content`);
+          const { error } = await supabase.functions.invoke('process-document', {
+            body: { documentId: docId }
+          });
+          
+          if (error) {
+            console.error(`Error processing document ${docId}:`, error);
+            hasError = true;
+          } else {
+            processedCount++;
+          }
+        } else {
+          console.log(`Document ${docId} already has content, skipping processing`);
         }
       } catch (error) {
         console.error(`Failed to process document ${docId}:`, error);
@@ -125,6 +143,8 @@ const Index = () => {
     
     if (hasError) {
       setProcessingError("Some documents couldn't be processed. The AI will try to use the available content.");
+    } else if (processedCount > 0) {
+      console.log(`Successfully processed ${processedCount} documents`);
     }
     
     console.log("Document processing complete");
@@ -233,7 +253,7 @@ const Index = () => {
           max_tokens: maxTokens,
           instructions: instructions,
           sources: sourcesSettings,
-          documentIds: documentIds,
+          documentIds: documentIds, // Pass the document IDs
           requestTemplate: requestTemplate,
           apiEndpoint: apiEndpoint,
           apiKey: apiKey,
@@ -310,7 +330,7 @@ const Index = () => {
                 title: docData.name,
                 content: docData.content,
                 documentName: docData.name,
-                relevanceScore: 95
+                relevanceScore: 85  // Default high score since it was used
               });
             }
           } catch (docError) {
@@ -324,6 +344,7 @@ const Index = () => {
           setHasSourcesUsed(true);
         } else {
           console.log("No document sources found");
+          setHasSourcesUsed(false);
         }
       } else {
         console.log("No source data available");
@@ -337,6 +358,16 @@ const Index = () => {
         description: `Failed to process your message: ${error.message}`,
         variant: "destructive"
       });
+      
+      // Add a fallback error message
+      const errorResponse: Message = {
+        id: v4(),
+        content: "I'm sorry, I encountered an error while processing your request. Please try again or check if your documents are properly uploaded.",
+        role: 'assistant',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorResponse]);
     } finally {
       setIsLoading(false);
     }
@@ -445,7 +476,8 @@ const Index = () => {
                     {documentSourceMode === 'selected' && (
                       <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
                         {isFetchingDocuments ? (
-                          <div className="text-sm text-muted-foreground animate-pulse">
+                          <div className="text-sm text-muted-foreground animate-pulse flex items-center">
+                            <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
                             Loading documents...
                           </div>
                         ) : userDocuments.length > 0 ? (
