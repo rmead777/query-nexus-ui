@@ -39,6 +39,22 @@ interface Document {
   content?: string;
 }
 
+// Define the document database type to match what comes back from Supabase
+interface DocumentDB {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  upload_date: string;
+  url: string;
+  document_id?: string;
+  is_readable?: boolean;
+  needs_processing?: boolean;
+  extraction_method?: string;
+  content?: string;
+  user_id?: string;
+}
+
 const Documents = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,7 +87,8 @@ const Documents = () => {
         throw error;
       }
       
-      const formattedDocs = data.map(doc => ({
+      // Explicitly type the data as DocumentDB[] to ensure TypeScript recognizes all properties
+      const formattedDocs = (data as DocumentDB[]).map(doc => ({
         id: doc.id,
         name: doc.name,
         type: doc.type,
@@ -81,7 +98,8 @@ const Documents = () => {
         document_id: doc.document_id,
         is_readable: doc.is_readable,
         needs_processing: doc.needs_processing,
-        extraction_method: doc.extraction_method
+        extraction_method: doc.extraction_method,
+        content: doc.content
       }));
       
       setDocuments(formattedDocs);
